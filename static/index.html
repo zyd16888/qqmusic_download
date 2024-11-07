@@ -1,0 +1,78 @@
+<!-- static/index.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音乐下载器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen py-8">
+    <div class="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-lg">
+        <div class="flex items-center gap-2 mb-6">
+            <i class="ri-music-fill text-2xl text-blue-500"></i>
+            <h1 class="text-2xl font-bold text-gray-800">音乐下载器</h1>
+        </div>
+
+        <div class="space-y-4">
+            <!-- 搜索框 -->
+            <div class="flex gap-2">
+                <input
+                    type="text"
+                    id="songName"
+                    placeholder="请输入歌曲名称"
+                    class="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                <button
+                    id="searchBtn"
+                    class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400 flex items-center gap-2"
+                >
+                    <i class="ri-search-line"></i>
+                    搜索
+                </button>
+            </div>
+
+            <!-- 音质选择 -->
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-700">音质：</span>
+                    <select
+                        id="quality"
+                        class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        <option value="14">臻品母带</option>
+                        <option value="11" selected>SQ无损音质</option>
+                        <option value="8">320kbps</option>
+                        <option value="4">128kbps</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-700">数量：</span>
+                    <select
+                        id="searchCount"
+                        class="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        <option value="1">1首</option>
+                        <option value="2">2首</option>
+                        <option value="3" selected>3首</option>
+                        <option value="4">4首</option>
+                        <option value="5">5首</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 错误提示 -->
+            <div id="error" class="text-red-500 text-sm hidden"></div>
+
+            <!-- 搜索结果列表 -->
+            <div id="searchResults" class="space-y-4 hidden">
+                <h2 class="text-lg font-semibold text-gray-800">搜索结果</h2>
+                <div id="resultsList" class="space-y-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
