@@ -7,21 +7,20 @@ import httpx
 import uvicorn
 from pathlib import Path
 import asyncio
-import io
-import mutagen
 from mutagen.flac import FLAC, Picture
-from mutagen.id3 import ID3, APIC
 import aiohttp
-from PIL import Image
 from urllib.parse import quote
 import os
 from urllib.parse import urlparse, unquote
 import logging
 import json
-from pydantic import BaseModel
 from typing import AsyncGenerator, Optional
 import re
-from datetime import timedelta
+from PyQt6.QtWidgets import QApplication, QMainWindow
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtCore import QUrl
+import sys
+from threading import Thread
 
 # 设置日志
 # logging.basicConfig(level=logging.DEBUG)
@@ -303,5 +302,33 @@ async def play_song(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("音乐下载器")
+        # self.setFixedSize(700, 800)
+        
+        # 创建WebView
+        self.web_view = QWebEngineView()
+        self.setCentralWidget(self.web_view)
+        
+        # 加载本地URL
+        self.web_view.setUrl(QUrl("http://localhost:8000"))
+
+def run_fastapi():
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+
+def main():
+    # 启动FastAPI服务器
+    server_thread = Thread(target=run_fastapi, daemon=True)
+    server_thread.start()
+    
+    # 启动Qt应用
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    
+    sys.exit(app.exec())
+
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    main()
