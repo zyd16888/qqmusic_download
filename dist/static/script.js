@@ -227,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
         errorDiv.classList.add('text-green-500');
         setTimeout(() => {
             errorDiv.classList.add('hidden');
-        }, 3000);
+        }, 5000);
     };
 
     let audioPlayer = null;
