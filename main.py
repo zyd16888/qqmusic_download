@@ -1,5 +1,5 @@
 # main.py
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,9 +19,12 @@ from urllib.parse import urlparse, unquote
 import logging
 import json
 from pydantic import BaseModel
+from typing import AsyncGenerator, Optional
+import re
+from datetime import timedelta
 
 # 设置日志
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
@@ -68,6 +71,8 @@ async def search_songs(word: str, q: int = 11, count: int = 3):
                     data = resp.json()
                     if data.get("code") == 200 and data.get("data"):
                         results.append(data["data"])
+
+            print(results)
             
             return {"code": 200, "data": results}
     except Exception as e:
@@ -215,6 +220,86 @@ async def download_song(url: str, song_info: str):
                 }
             }
             
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def get_content_length(url: str) -> int:
+    """获取音频文件大小"""
+    async with aiohttp.ClientSession() as session:
+        async with session.head(url) as response:
+            return int(response.headers.get('Content-Length', 0))
+
+async def stream_audio(url: str, start: int = 0, end: Optional[int] = None) -> AsyncGenerator[bytes, None]:
+    """流式传输音频,支持范围请求"""
+    chunk_size = 8192
+    retries = 3
+    
+    for attempt in range(retries):
+        try:
+            async with httpx.AsyncClient() as client:
+                headers = {}
+                if start or end:
+                    headers['Range'] = f'bytes={start}-{end if end else ""}'
+                
+                async with client.stream('GET', url, headers=headers, follow_redirects=True) as response:
+                    if response.status_code not in (200, 206):
+                        raise HTTPException(status_code=400, detail="无法获取音乐文件")
+                    
+                    async for chunk in response.aiter_bytes(chunk_size):
+                        yield chunk
+                        
+            break  # 成功完成,退出重试循环
+            
+        except (httpx.StreamClosed, ConnectionError):
+            if attempt == retries - 1:  # 最后一次重试
+                raise
+            await asyncio.sleep(1)  # 重试前等待
+            continue
+
+@app.get("/api/play")
+async def play_song(
+    request: Request, 
+    url: str,
+    range: Optional[str] = Header(None)
+):
+    try:
+        if not url:
+            raise HTTPException(status_code=400, detail="播放链接不能为空")
+            
+        if not url.startswith(('http://', 'https://')):
+            raise HTTPException(status_code=400, detail="无效的播放链接")
+
+        content_length = await get_content_length(url)
+        start = 0
+        end = content_length - 1
+
+        # 处理范围请求
+        if range:
+            match = re.match(r'bytes=(\d+)-(\d*)', range)
+            if match:
+                start = int(match.group(1))
+                end = int(match.group(2)) if match.group(2) else content_length - 1
+
+        # 计算实际内容长度
+        content_length = end - start + 1
+
+        headers = {
+            'Accept-Ranges': 'bytes',
+            'Content-Range': f'bytes {start}-{end}/{content_length}',
+            'Content-Length': str(content_length),
+            'Content-Type': 'audio/mpeg',
+            'Content-Disposition': 'inline',
+            'Cache-Control': 'public, max-age=3600',
+        }
+
+        status_code = 206 if start > 0 else 200
+
+        return StreamingResponse(
+            stream_audio(url, start, end),
+            status_code=status_code,
+            headers=headers
+        )
+                
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

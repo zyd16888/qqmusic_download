@@ -7,6 +7,46 @@
     <title>音乐下载器</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        .loading-spinner {
+            margin-left: 8px;
+        }
+    
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+    
+        [data-progress-container] {
+            cursor: pointer;
+            position: relative;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+    
+        [data-progress-container]:hover {
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+    
+        [data-progress] {
+            transition: width 0.1s linear;
+            pointer-events: none;
+        }
+    
+        /* 添加拖动时的样式 */
+        [data-progress-container].dragging {
+            background-color: rgba(59, 130, 246, 0.2);
+        }
+    
+        [data-progress-container].dragging [data-progress] {
+            transition: none;
+        }
+    </style>
 </head>
 <body class="bg-gray-100 min-h-screen py-8">
     <div class="max-w-2xl mx-auto p-6 bg-white rounded-lg shadow-lg">
