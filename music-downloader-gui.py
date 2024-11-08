@@ -48,6 +48,8 @@ class MusicDownloaderGUI:
         self.main_frame.rowconfigure(1, weight=1)
         self.log_frame.columnconfigure(0, weight=1)
         self.log_frame.rowconfigure(0, weight=1)
+        
+        self.stop_event = threading.Event()
 
     def setup_single_download_page(self):
         # 搜索框
@@ -58,11 +60,29 @@ class MusicDownloaderGUI:
         
         # 音质选择
         ttk.Label(self.single_frame, text="音质选择:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.quality_var = tk.IntVar(value=11)
-        self.quality_combo = ttk.Combobox(self.single_frame, textvariable=self.quality_var, 
-                                        values=list(range(1, 15)), width=10)
+        self.quality_var = tk.StringVar(value="无损音质")
+        quality_options = [
+            "标准音质",
+            "HQ高音质",
+            "无损音质",
+            "母带",
+            "其他"
+        ]
+        self.quality_combo = ttk.Combobox(self.single_frame, 
+                                        textvariable=self.quality_var,
+                                        values=quality_options,
+                                        width=20)
         self.quality_combo.grid(row=1, column=1, sticky=tk.W, pady=5)
-        ttk.Label(self.single_frame, text="(1-14, 数字越大音质越好)").grid(row=1, column=2, sticky=tk.W, pady=5)
+        
+        # 添加其他音质输入框
+        self.custom_quality_var = tk.StringVar()
+        self.custom_quality_entry = ttk.Entry(self.single_frame, 
+                                            textvariable=self.custom_quality_var,
+                                            width=10)
+        self.custom_quality_entry.grid(row=1, column=2, sticky=tk.W, pady=5)
+        self.custom_quality_entry.grid_remove()  # 默认隐藏
+        
+        self.quality_combo.bind('<<ComboboxSelected>>', self.on_quality_changed)
         
         # 搜索结果序号
         ttk.Label(self.single_frame, text="搜索结果序号:").grid(row=2, column=0, sticky=tk.W, pady=5)
@@ -84,10 +104,44 @@ class MusicDownloaderGUI:
         self.browse_btn = ttk.Button(self.batch_frame, text="浏览", command=self.browse_file)
         self.browse_btn.grid(row=0, column=2, padx=5, pady=5)
         
-        # 批量下载按钮
-        self.batch_download_btn = ttk.Button(self.batch_frame, text="开始批量下载", 
+        # 添加音质选择
+        ttk.Label(self.batch_frame, text="音质选择:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.batch_quality_var = tk.StringVar(value="无损音质")
+        quality_options = [
+            "标准音质",
+            "HQ高音质",
+            "无损音质",
+            "母带",
+            "其他"
+        ]
+        self.batch_quality_combo = ttk.Combobox(self.batch_frame, 
+                                        textvariable=self.batch_quality_var,
+                                        values=quality_options,
+                                        width=20)
+        self.batch_quality_combo.grid(row=1, column=1, sticky=tk.W, pady=5)
+        
+        # 添加其他音质输入框
+        self.batch_custom_quality_var = tk.StringVar()
+        self.batch_custom_quality_entry = ttk.Entry(self.batch_frame, 
+                                        textvariable=self.batch_custom_quality_var,
+                                        width=10)
+        self.batch_custom_quality_entry.grid(row=1, column=2, sticky=tk.W, pady=5)
+        self.batch_custom_quality_entry.grid_remove()  # 默认隐藏
+        
+        self.batch_quality_combo.bind('<<ComboboxSelected>>', self.on_batch_quality_changed)
+        
+        # 批量下载和停止按钮
+        button_frame = ttk.Frame(self.batch_frame)
+        button_frame.grid(row=2, column=0, columnspan=3, pady=20)
+        
+        self.batch_download_btn = ttk.Button(button_frame, text="开始批量下载", 
                                            command=self.download_batch)
-        self.batch_download_btn.grid(row=1, column=0, columnspan=3, pady=20)
+        self.batch_download_btn.grid(row=0, column=0, padx=5)
+        
+        self.stop_btn = ttk.Button(button_frame, text="停止下载", 
+                                 command=self.stop_download,
+                                 state='disabled')
+        self.stop_btn.grid(row=0, column=1, padx=5)
 
     def log_message(self, message):
         """添加日志消息到文本框"""
@@ -107,9 +161,14 @@ class MusicDownloaderGUI:
         def download_thread():
             try:
                 self.log_message(f"开始下载: {song_name}")
+                quality = self.get_quality_value()
+                if quality is None:
+                    return
+                
                 success = download_song(song_name, 
                                      n=self.index_var.get(),
-                                     q=self.quality_var.get())
+                                     q=quality,
+                                     callback=self.log_message)
                 if success:
                     self.log_message(f"下载完成: {song_name}")
                 else:
@@ -128,17 +187,27 @@ class MusicDownloaderGUI:
             messagebox.showwarning("警告", "请选择有效的歌曲列表文件")
             return
             
+        quality = self.get_batch_quality_value()
+        if quality is None:
+            return
+            
+        self.stop_event.clear()
         self.batch_download_btn.state(['disabled'])
+        self.stop_btn.state(['!disabled'])
         
         def batch_download_thread():
             try:
                 self.log_message(f"开始批量下载，文件: {file_path}")
-                download_from_file(file_path)
+                download_from_file(file_path, 
+                                callback=self.log_message,
+                                stop_event=self.stop_event,
+                                quality=quality)
                 self.log_message("批量下载完成")
             except Exception as e:
                 self.log_message(f"批量下载出错: {str(e)}")
             finally:
                 self.root.after(0, lambda: self.batch_download_btn.state(['!disabled']))
+                self.root.after(0, lambda: self.stop_btn.state(['disabled']))
         
         threading.Thread(target=batch_download_thread, daemon=True).start()
 
@@ -149,6 +218,68 @@ class MusicDownloaderGUI:
         )
         if file_path:
             self.file_var.set(file_path)
+
+    def on_quality_changed(self, event):
+        if self.quality_combo.get() == "其他":
+            self.custom_quality_entry.grid()
+        else:
+            self.custom_quality_entry.grid_remove()
+
+    def get_quality_value(self):
+        """获取单曲下载页面的音质值"""
+        quality_map = {
+            "标准音质": 4,
+            "HQ高音质": 8,
+            "无损音质": 11,
+            "母带": 14
+        }
+        
+        quality = self.quality_combo.get()
+        if quality == "其他":
+            try:
+                value = int(self.custom_quality_var.get())
+                if 1 <= value <= 14:
+                    return value
+                else:
+                    raise ValueError()
+            except ValueError:
+                messagebox.showwarning("警告", "请输入1-14之间的数字")
+                return None
+        return quality_map[quality]
+
+    def on_batch_quality_changed(self, event):
+        """批量下载页面音质选择变化处理"""
+        if self.batch_quality_combo.get() == "其他":
+            self.batch_custom_quality_entry.grid()
+        else:
+            self.batch_custom_quality_entry.grid_remove()
+
+    def get_batch_quality_value(self):
+        """获取批量下载页面的音质值"""
+        quality_map = {
+            "标准音质": 4,
+            "HQ高音质": 8,
+            "无损音质": 11,
+            "母带": 14
+        }
+        
+        quality = self.batch_quality_combo.get()
+        if quality == "其他":
+            try:
+                value = int(self.batch_custom_quality_var.get())
+                if 1 <= value <= 14:
+                    return value
+                else:
+                    raise ValueError()
+            except ValueError:
+                messagebox.showwarning("警告", "请输入1-14之间的数字")
+                return None
+        return quality_map[quality]
+
+    def stop_download(self):
+        self.stop_event.set()
+        self.log_message("正在停止下载...")
+        self.stop_btn.state(['disabled'])
 
 def main():
     root = tk.Tk()

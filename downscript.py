@@ -51,7 +51,13 @@ def add_cover_to_audio(filepath, cover_url):
     except Exception as e:
         print(f"下载或处理封面图片时出错: {str(e)}")
 
-def download_song(keyword, n=1, q=11):
+def download_song(keyword, n=1, q=11, callback=None):
+    # 修改所有 print 为回调函数调用
+    def log(message):
+        if callback:
+            callback(message)
+        print(message)
+    
     # 创建downloads文件夹（如果不存在）
     if not os.path.exists('downloads'):
         os.makedirs('downloads')
@@ -63,13 +69,14 @@ def download_song(keyword, n=1, q=11):
         params['n'] = n
     if q:
         params['q'] = q
-    print(params)
+    log(f"请求参数: {params}")
+    
     try:
         # 获取歌曲信息
         response = requests.get(base_url, params=params)
         data = response.json()
 
-        print(data)
+        log(data)
         
         if data['code'] == 200:
             song_info = data['data']
@@ -90,9 +97,9 @@ def download_song(keyword, n=1, q=11):
             filepath = os.path.join('downloads', filename)
             
             # 下载歌曲
-            print(f"正在下载: {filename}")
-            print(f"音质: {song_info.get('quality', '未知')}")
-            print(f"比特率: {song_info.get('kbps', '未知')}")
+            log(f"正在下载: {filename}")
+            log(f"音质: {song_info.get('quality', '未知')}")
+            log(f"比特率: {song_info.get('kbps', '未知')}")
             
             song_response = requests.get(song_url)
             
@@ -101,18 +108,18 @@ def download_song(keyword, n=1, q=11):
             
             # 添加封面
             if song_info.get('cover'):
-                print("正在添加封面...")
+                log("正在添加封面...")
                 add_cover_to_audio(filepath, song_info['cover'])
             
-            print(f"下载完成！保存在: {filepath}")
+            log(f"下载完成！保存在: {filepath}")
             return True
             
         else:
-            print(f"获取歌曲信息失败: {data.get('msg', '未知错误')}")
+            log(f"获取歌曲信息失败: {data.get('msg', '未知错误')}")
             return False
             
     except Exception as e:
-        print(f"发生错误: {str(e)}")
+        log(f"发生错误: {str(e)}")
         return False
 
 def get_existing_songs():
@@ -128,8 +135,13 @@ def get_existing_songs():
             existing_songs.add(song_name)
     return existing_songs
 
-def download_from_file(filename):
+def download_from_file(filename, callback=None, stop_event=None, quality=11):
     """从文件中读取歌曲列表并下载"""
+    def log(message):
+        if callback:
+            callback(message)
+        print(message)
+        
     try:
         with open(filename, 'r', encoding='utf-8') as f:
             songs = f.read().splitlines()
@@ -142,8 +154,12 @@ def download_from_file(filename):
         failed = []
         skipped = []
         
-        print(f"共找到 {total} 首歌曲")
+        log(f"共找到 {total} 首歌曲")
         for i, song in enumerate(songs, 1):
+            if stop_event and stop_event.is_set():
+                log("\n下载已停止")
+                break
+                
             if not song.strip():  # 跳过空行
                 continue
                 
@@ -152,36 +168,36 @@ def download_from_file(filename):
             
             # 检查是否已存在
             if song_name in existing_songs:
-                print(f"\n[{i}/{total}] 歌曲已存在,跳过: {song}")
+                log(f"\n[{i}/{total}] 歌曲已存在,跳过: {song}")
                 skipped.append(song)
                 continue
                 
-            print(f"\n[{i}/{total}] 正在下载: {song}")
-            if download_song(song):
+            log(f"\n[{i}/{total}] 正在下载: {song}")
+            if download_song(song, q=quality, callback=callback):
                 success += 1
                 existing_songs.add(song_name)  # 添加到已存在列表
             else:
                 failed.append(song)
         
-        print(f"\n下载完成！")
-        print(f"成功: {success}")
-        print(f"失败: {len(failed)}")
-        print(f"跳过: {len(skipped)}")
+        log(f"\n下载完成！")
+        log(f"成功: {success}")
+        log(f"失败: {len(failed)}")
+        log(f"跳过: {len(skipped)}")
         
         if failed:
-            print("\n以下歌曲下载失败:")
+            log("\n以下歌曲下载失败:")
             for song in failed:
-                print(f"- {song}")
+                log(f"- {song}")
                 
         if skipped:
-            print("\n以下歌曲已存在(已跳过):")
+            log("\n以下歌曲已存在(已跳过):")
             for song in skipped:
-                print(f"- {song}")
+                log(f"- {song}")
                 
     except FileNotFoundError:
-        print(f"找不到文件: {filename}")
+        log(f"找不到文件: {filename}")
     except Exception as e:
-        print(f"读取文件时出错: {str(e)}")
+        log(f"读取文件时出错: {str(e)}")
 
 def main():
     parser = argparse.ArgumentParser(description='下载QQ音乐歌曲')
