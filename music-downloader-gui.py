@@ -275,7 +275,7 @@ class MusicDownloaderGUI:
                 # 如果只下载歌词
                 if lyrics_option == "only_lyrics":
                     self.log_message(f"开始下载歌词: {song_name}")
-                    success, result = download_lyrics(song_name, callback=self.log_message)
+                    success, result = download_lyrics(0,song_name, callback=self.log_message)
                     if success:
                         self.log_message(f"歌词下载完成: {result}")
                     else:
@@ -352,7 +352,7 @@ class MusicDownloaderGUI:
                     try:
                         if lyrics_option == "only_lyrics":
                             # 仅下载歌词
-                            success_flag, result = download_lyrics(song, callback=self.log_message)
+                            success_flag, result = download_lyrics(0,song, callback=self.log_message)
                             if success_flag:
                                 success += 1
                             else:

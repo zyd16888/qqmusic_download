@@ -542,7 +542,7 @@ def read_lrc_file(lrc_path):
 def download_lyrics(songmid, keyword, audio_filename=None, callback=None, return_content=False):
     """下载歌词的函数，优先使用QQ音乐，失败后尝试网易云
     Args:
-        songmid: QQ音乐songmid
+        songmid: QQ音乐songmid，如果为0则需要先搜索获取
         keyword: 搜索关键词
         audio_filename: 音频文件名(不含路径)，可选
         callback: 日志回调函数
@@ -555,18 +555,44 @@ def download_lyrics(songmid, keyword, audio_filename=None, callback=None, return
         if callback:
             callback(message)
         print(message)
+    print(audio_filename)
+    # 如果songmid为0，先尝试获取真实的songmid
+    if songmid == 0:
+        try:
+            # 构建API URL获取歌曲信息
+            base_url = 'https://api.lolimi.cn/API/qqdg/'
+            params = {'word': keyword, 'n': 1}
+            response = requests.get(base_url, params=params)
+            data = response.json()
+            
+            if data['code'] == 200:
+                song_info = data['data']
+                song_link = song_info['link']  # 获取歌曲链接
+                songmid = song_link.split('songmid=')[1].split('&')[0]  # 提取songmid
+                log(f"已获取歌曲ID: {songmid}")
+                if audio_filename is None:
+                    filename = f"{song_info['song']} - {song_info['singer']}"
+                    filename = "".join(c if c not in r'<>:"/\|?*' else ' ' for c in filename)
+                    audio_filename = filename
+            else:
+                log(f"获取歌曲信息失败: {data.get('msg', '未知错误')}")
+                songmid = None
+        except Exception as e:
+            log(f"获取歌曲信息时出错: {str(e)}")
+            songmid = None
     
-    # 首先尝试使用QQ音乐API（如果keyword是songmid）
-    success, result = download_lyrics_from_qq(
-        songmid,
-        audio_filename,
-        callback=callback,
-        return_content=return_content
-    )
-    if success:
-        return True, result
+    # 如果成功获取到songmid，使用QQ音乐API
+    if songmid:
+        success, result = download_lyrics_from_qq(
+            songmid,
+            audio_filename,
+            callback=callback,
+            return_content=return_content
+        )
+        if success:
+            return True, result
     
-    # 如果QQ音乐失败或keyword不是songmid，尝试网易云
+    # 如果QQ音乐失败或未获取到songmid，尝试网易云
     log("尝试从网易云获取歌词...")
     return download_lyrics_from_wyy(
         keyword,
