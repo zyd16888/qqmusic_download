@@ -117,7 +117,7 @@ class MusicDownloaderGUI:
         
         self.lyrics_option = tk.StringVar(value="no_lyrics")
         ttk.Radiobutton(lyrics_frame, 
-                        text="不下载歌词",
+                        text="仅下载音频",
                         variable=self.lyrics_option,
                         value="no_lyrics").pack(anchor=tk.W)
         ttk.Radiobutton(lyrics_frame, 
@@ -125,15 +125,15 @@ class MusicDownloaderGUI:
                         variable=self.lyrics_option,
                         value="only_lyrics").pack(anchor=tk.W)
         ttk.Radiobutton(lyrics_frame, 
-                        text="同时下载歌词与音频",
+                        text="下载音频和歌词",
                         variable=self.lyrics_option,
                         value="save_lyrics").pack(anchor=tk.W)
         ttk.Radiobutton(lyrics_frame, 
-                        text="下载歌词嵌入但不保存",
+                        text="下载音频并嵌入歌词",
                         variable=self.lyrics_option,
                         value="embed_only").pack(anchor=tk.W)
         ttk.Radiobutton(lyrics_frame, 
-                        text="下载歌词嵌入并保存",
+                        text="下载音频嵌入歌词并保存",
                         variable=self.lyrics_option,
                         value="save_and_embed").pack(anchor=tk.W)
         
@@ -194,23 +194,31 @@ class MusicDownloaderGUI:
         
         self.batch_quality_combo.bind('<<ComboboxSelected>>', on_batch_quality_changed)
         
-        # 替换原来的歌词下载复选框为单选按钮组
-        lyrics_frame = ttk.LabelFrame(self.batch_frame, text="歌词下载选项", padding="5")
+        # 修改歌词下载选项
+        lyrics_frame = ttk.LabelFrame(self.batch_frame, text="歌词选项", padding="5")
         lyrics_frame.grid(row=1, column=2, sticky=tk.W, pady=5)
         
         self.batch_lyrics_option = tk.StringVar(value="no_lyrics")
         ttk.Radiobutton(lyrics_frame, 
-                        text="不下载歌词",
+                        text="仅下载音频",
                         variable=self.batch_lyrics_option,
                         value="no_lyrics").pack(anchor=tk.W)
-        ttk.Radiobutton(lyrics_frame, 
-                        text="同时下载歌词",
-                        variable=self.batch_lyrics_option,
-                        value="with_lyrics").pack(anchor=tk.W)
         ttk.Radiobutton(lyrics_frame, 
                         text="仅下载歌词",
                         variable=self.batch_lyrics_option,
                         value="only_lyrics").pack(anchor=tk.W)
+        ttk.Radiobutton(lyrics_frame, 
+                        text="下载音频和歌词",
+                        variable=self.batch_lyrics_option,
+                        value="save_lyrics").pack(anchor=tk.W)
+        ttk.Radiobutton(lyrics_frame, 
+                        text="下载音频并嵌入歌词",
+                        variable=self.batch_lyrics_option,
+                        value="embed_only").pack(anchor=tk.W)
+        ttk.Radiobutton(lyrics_frame, 
+                        text="下载音频嵌入歌词并保存",
+                        variable=self.batch_lyrics_option,
+                        value="save_and_embed").pack(anchor=tk.W)
         
         # 批量下载和停止按钮
         button_frame = ttk.Frame(self.batch_frame)
@@ -350,10 +358,14 @@ class MusicDownloaderGUI:
                                 failed.append(f"{song} (歌词下载失败)")
                         else:
                             # 下载音乐（可能包含歌词）
+                            download_lyrics_flag = lyrics_option in ("save_lyrics", "save_and_embed")
+                            embed_lyrics_flag = lyrics_option in ("embed_only", "save_and_embed")
+                            
                             if download_song(song, 
                                           q=quality,
                                           callback=self.log_message,
-                                          download_lyrics_flag=(lyrics_option == "with_lyrics")):
+                                          download_lyrics_flag=download_lyrics_flag,
+                                          embed_lyrics_flag=embed_lyrics_flag):
                                 success += 1
                             else:
                                 failed.append(song)
