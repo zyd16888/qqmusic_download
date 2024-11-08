@@ -505,20 +505,22 @@ def get_existing_songs():
             existing_songs.add(song_name)
     return existing_songs
 
-def download_from_file(filename, callback=None, stop_event=None, quality=11, download_lyrics_flag=False):
+def download_from_file(filename, callback=None, stop_event=None, quality=11, 
+                      download_lyrics_flag=False, embed_lyrics_flag=False, lyrics_option="no_lyrics"):
     """从文件中读取歌曲列表并下载
     Args:
         filename: 歌曲列表文件路径
         callback: 日志回调函数
         stop_event: 停止事件标志
         quality: 音质选项
-        download_lyrics_flag: 是否下载歌词
+        download_lyrics_flag: 是否下载歌词文件
+        embed_lyrics_flag: 是否嵌入歌词
+        lyrics_option: 歌词处理选项 ("no_lyrics"/"only_lyrics"/"save_lyrics"/"embed_only"/"save_and_embed")
     """
     def log(message):
         if callback:
             callback(message)
         print(message)
-    print(filename)
 
     try:
         # 尝试不同的编码方式读取文件
@@ -567,11 +569,32 @@ def download_from_file(filename, callback=None, stop_event=None, quality=11, dow
                 skipped.append(song)
                 continue
 
-            log(f"\n[{i}/{total}] 正在下载: {song}")
-            if download_song(song, q=quality, callback=callback, download_lyrics_flag=download_lyrics_flag):
-                success += 1
-                existing_songs.add(song_name)  # 添加到已存在列表
-            else:
+            log(f"\n[{i}/{total}] 处理: {song}")
+            
+            try:
+                if lyrics_option == "only_lyrics":
+                    # 仅下载歌词
+                    success_flag, result = download_lyrics(0, song, callback=callback)
+                    if success_flag:
+                        success += 1
+                    else:
+                        failed.append(f"{song} (歌词下载失败)")
+                else:
+                    # 下载音乐（可能包含歌词）
+                    download_lyrics_flag = lyrics_option in ("save_lyrics", "save_and_embed")
+                    embed_lyrics_flag = lyrics_option in ("embed_only", "save_and_embed")
+                    
+                    if download_song(song, 
+                                  q=quality,
+                                  callback=callback,
+                                  download_lyrics_flag=download_lyrics_flag,
+                                  embed_lyrics_flag=embed_lyrics_flag):
+                        success += 1
+                        existing_songs.add(song_name)
+                    else:
+                        failed.append(song)
+            except Exception as e:
+                log(f"处理出错: {str(e)}")
                 failed.append(song)
 
         # 准备失败列表文件路径
