@@ -332,12 +332,29 @@ class MusicDownloaderGUI:
             try:
                 self.log_message(f"开始批量处理，文件: {file_path}")
                 
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    songs = f.read().splitlines()
+                # 尝试不同的编码方式读取文件
+                songs = None
+                encodings = ['utf-8', 'gbk', 'gb2312', 'ansi']
+                
+                for encoding in encodings:
+                    try:
+                        with open(file_path, 'r', encoding=encoding) as f:
+                            songs = [line.strip() for line in f.read().splitlines() if line.strip()]
+                        self.log_message(f"使用 {encoding} 编码成功读取文件")
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                
+                if songs is None:
+                    raise UnicodeDecodeError("无法使用支持的编码读取文件")
+                
+                # 获取已存在的歌曲
+                existing_songs = get_existing_songs()
                 
                 total = len(songs)
                 success = 0
                 failed = []
+                skipped = []
                 
                 for i, song in enumerate(songs, 1):
                     if self.stop_event.is_set():
@@ -347,12 +364,21 @@ class MusicDownloaderGUI:
                     if not song.strip():  # 跳过空行
                         continue
                     
+                    # 提取歌曲名(不包含歌手名)
+                    song_name = song.split(' - ')[0].strip()
+                    
+                    # 检查是否已存在
+                    if song_name in existing_songs:
+                        self.log_message(f"\n[{i}/{total}] 歌曲已存在，跳过: {song}")
+                        skipped.append(song)
+                        continue
+                    
                     self.log_message(f"\n[{i}/{total}] 处理: {song}")
                     
                     try:
                         if lyrics_option == "only_lyrics":
                             # 仅下载歌词
-                            success_flag, result = download_lyrics(0,song, callback=self.log_message)
+                            success_flag, result = download_lyrics(0, song, callback=self.log_message)
                             if success_flag:
                                 success += 1
                             else:
@@ -368,6 +394,7 @@ class MusicDownloaderGUI:
                                           download_lyrics_flag=download_lyrics_flag,
                                           embed_lyrics_flag=embed_lyrics_flag):
                                 success += 1
+                                existing_songs.add(song_name)  # 添加到已存在列表
                             else:
                                 failed.append(song)
                     except Exception as e:
@@ -384,9 +411,16 @@ class MusicDownloaderGUI:
                             self.log_message(f"- {item}")
                     self.log_message(f"\n失败列表已保存到: {failed_file}")
                 
+                # 显示跳过的歌曲
+                if skipped:
+                    self.log_message("\n以下歌曲已存在(已跳过):")
+                    for song in skipped:
+                        self.log_message(f"- {song}")
+                
                 self.log_message(f"\n批量处理完成！")
                 self.log_message(f"成功: {success}")
                 self.log_message(f"失败: {len(failed)}")
+                self.log_message(f"跳过: {len(skipped)}")
                 
             except Exception as e:
                 self.log_message(f"批量处理出错: {str(e)}")

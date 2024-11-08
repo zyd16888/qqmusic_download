@@ -12,6 +12,29 @@ import humanize  # 用于格式化文件大小
 from concurrent.futures import ThreadPoolExecutor
 import json
 import html
+import urllib3
+import ssl
+
+# 全局禁用SSL验证和警告
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# 创建全局session
+session = requests.Session()
+session.verify = False
+session.trust_env = False
+
+# 设置默认SSL上下文
+try:
+    # 创建默认SSL上下文
+    default_context = ssl.create_default_context()
+    default_context.set_ciphers("DEFAULT:@SECLEVEL=1")
+    # 应用到session
+    session.mount("https://", requests.adapters.HTTPAdapter(max_retries=3))
+except Exception as e:
+    print(f"SSL配置警告: {str(e)}")
+
+# 替换requests.get为session.get
+requests.get = session.get
 
 def add_cover_to_audio(filepath, cover_url):
     # 下载封面
@@ -464,47 +487,65 @@ def download_from_file(filename, callback=None, stop_event=None, quality=11, dow
         if callback:
             callback(message)
         print(message)
-        
+    print(filename)
+
     try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            songs = f.read().splitlines()
-            
+        # 尝试不同的编码方式读取文件
+        encodings = ["utf-8", "gbk", "gb2312", "ansi"]
+        content = None
+
+        for encoding in encodings:
+            try:
+                with open(filename, "r", encoding=encoding) as f:
+                    content = f.read()
+                log(f"成功使用 {encoding} 编码读取文件")
+                break
+            except UnicodeDecodeError:
+                log(f"使用 {encoding} 编码读取失败，尝试下一个编码")
+                continue
+
+        if content is None:
+            raise UnicodeDecodeError("无法使用任何支持的编码读取文件")
+
+        # 将内容分割成行
+        songs = [line.strip() for line in content.splitlines() if line.strip()]
+
         # 获取已存在的歌曲
         existing_songs = get_existing_songs()
-        
+
         total = len(songs)
         success = 0
         failed = []
         skipped = []
-        
+
         log(f"共找到 {total} 首歌曲")
         for i, song in enumerate(songs, 1):
             if stop_event and stop_event.is_set():
                 log("\n下载已停止")
                 break
-                
+
             if not song.strip():  # 跳过空行
                 continue
-                
+
             # 提取歌曲名(不包含歌手名)
             song_name = song.split(' - ')[0].strip()
-            
+
             # 检查是否已存在
             if song_name in existing_songs:
                 log(f"\n[{i}/{total}] 歌曲已存在,跳过: {song}")
                 skipped.append(song)
                 continue
-                
+
             log(f"\n[{i}/{total}] 正在下载: {song}")
             if download_song(song, q=quality, callback=callback, download_lyrics_flag=download_lyrics_flag):
                 success += 1
                 existing_songs.add(song_name)  # 添加到已存在列表
             else:
                 failed.append(song)
-        
+
         # 准备失败列表文件路径
         failed_file = os.path.join(os.path.dirname(filename), 'failed_downloads.txt')
-        
+
         if failed:
             log("\n以下歌曲下载失败:")
             # 写入失败列表到文件
@@ -513,12 +554,12 @@ def download_from_file(filename, callback=None, stop_event=None, quality=11, dow
                     f.write(f"{song}\n")
                     log(f"- {song}")
             log(f"\n失败列表已保存到: {failed_file}")
-                
+
         if skipped:
             log("\n以下歌曲已存在(已跳过):")
             for song in skipped:
                 log(f"- {song}")
-        
+
         log(f"\n下载完成！")
         log(f"成功: {success}")
         log(f"失败: {len(failed)}")
