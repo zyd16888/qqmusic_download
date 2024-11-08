@@ -225,21 +225,28 @@ def download_from_file(filename, callback=None, stop_event=None, quality=11):
             else:
                 failed.append(song)
         
-        log(f"\n下载完成！")
-        log(f"成功: {success}")
-        log(f"失败: {len(failed)}")
-        log(f"跳过: {len(skipped)}")
+        # 准备失败列表文件路径
+        failed_file = os.path.join(os.path.dirname(filename), 'failed_downloads.txt')
         
         if failed:
             log("\n以下歌曲下载失败:")
-            for song in failed:
-                log(f"- {song}")
+            # 写入失败列表到文件
+            with open(failed_file, 'w', encoding='utf-8') as f:
+                for song in failed:
+                    f.write(f"{song}\n")
+                    log(f"- {song}")
+            log(f"\n失败列表已保存到: {failed_file}")
                 
         if skipped:
             log("\n以下歌曲已存在(已跳过):")
             for song in skipped:
                 log(f"- {song}")
-                
+        
+        log(f"\n下载完成！")
+        log(f"成功: {success}")
+        log(f"失败: {len(failed)}")
+        log(f"跳过: {len(skipped)}")
+
     except FileNotFoundError:
         log(f"找不到文件: {filename}")
     except Exception as e:
