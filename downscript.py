@@ -10,6 +10,8 @@ from io import BytesIO
 import time
 import humanize  # 用于格式化文件大小
 from concurrent.futures import ThreadPoolExecutor
+import json
+import html
 
 def add_cover_to_audio(filepath, cover_url):
     # 下载封面
@@ -110,7 +112,7 @@ def download_with_progress(url, filepath, callback=None):
             callback(f"下载出错: {str(e)}")
         return False
 
-def download_lyrics(keyword, audio_filename=None, callback=None, return_content=False):
+def download_lyrics_from_wyy(keyword, audio_filename=None, callback=None, return_content=False):
     """下载歌词的函数
     Args:
         keyword: 搜索关键词
@@ -179,6 +181,87 @@ def download_lyrics(keyword, audio_filename=None, callback=None, return_content=
             f.write(lyrics_content)
             
         log(f"歌词保存完成，共 {lyric_count} 行")
+        return True, output_file
+        
+    except Exception as e:
+        error_msg = f"下载歌词时出错: {str(e)}"
+        log(error_msg)
+        return False, error_msg
+
+def download_lyrics_from_qq(songmid, audio_filename=None, callback=None, return_content=False):
+    """从QQ音乐下载歌词
+    Args:
+        songmid: QQ音乐歌曲ID
+        audio_filename: 音频文件名(不含路径)，仅在需要保存文件时使用
+        callback: 日志回调函数
+        return_content: 是否返回歌词内容而不是保存文件
+    Returns:
+        如果 return_content=True: (成功标志, 歌词内容或错误信息)
+        如果 return_content=False: (成功标志, 歌词文件路径或错误信息)
+    """
+    def log(message):
+        if callback:
+            callback(message)
+        print(message)
+    log(f"正在从QQ音乐获取歌词: {songmid}")
+    try:
+        # 歌词接口
+        lyric_url = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg"
+        
+        # 构造请求参数
+        params = {
+            "nobase64": 1,
+            "songmid": songmid,
+            "platform": "yqq",
+            "inCharset": "utf8",
+            "outCharset": "utf-8",
+            "g_tk": 5381
+        }
+        
+        # 设置请求头
+        headers = {
+            "Referer": "https://y.qq.com/"
+        }
+        
+        response = requests.get(lyric_url, params=params, headers=headers)
+        
+        # 处理返回数据
+        lyric_data = response.text.strip('MusicJsonCallback(').strip(')')
+        lyric_json = json.loads(lyric_data)
+        
+        if lyric_json.get('retcode') != 0:
+            error_msg = "获取歌词失败"
+            log(error_msg)
+            return False, error_msg
+            
+        # 获取原歌词和翻译
+        original_lyric = html.unescape(html.unescape(lyric_json.get("lyric", "")))
+        translate_lyric = html.unescape(html.unescape(lyric_json.get("trans", "")))
+        
+        # 构建完整歌词内容
+        lyrics_content = original_lyric
+        
+        # 如果只需要内容，直接返回
+        if return_content:
+            return True, lyrics_content
+            
+        # 需要保存文件时，audio_filename 是必需的
+        if not audio_filename:
+            error_msg = "保存歌词文件时需要提供音频文件名"
+            log(error_msg)
+            return False, error_msg
+            
+        # 保存到文件
+        if not os.path.exists('downloads'):
+            os.makedirs('downloads')
+            
+        lyrics_filename = os.path.splitext(audio_filename)[0] + '.lrc'
+        output_file = os.path.join('downloads', lyrics_filename)
+        
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(lyrics_content)
+            
+        log(f"歌词已保存到: {output_file}")
         return True, output_file
         
     except Exception as e:
@@ -269,7 +352,8 @@ def download_song(keyword, n=1, q=11, callback=None, download_lyrics_flag=False,
         if data['code'] == 200:
             song_info = data['data']
             song_url = song_info['url']
-            song_link = song_info['link'] # 歌曲链接 https://i.y.qq.com/v8/playsong.html?songmid=003aAYrm3GE0Ac&type=0
+            song_link = song_info['link']  # 歌曲链接 https://i.y.qq.com/v8/playsong.html?songmid=003aAYrm3GE0Ac&type=0
+            songmid = song_link.split('songmid=')[1].split('&')[0]  # 提取songmid
             
             # 从URL中获取文件扩展名
             file_extension = os.path.splitext(urlparse(song_url).path)[1]
@@ -321,6 +405,7 @@ def download_song(keyword, n=1, q=11, callback=None, download_lyrics_flag=False,
                     if download_lyrics_flag or embed_lyrics_flag:
                         log("正在获取歌词...")
                         lyrics_success, lyrics_result = download_lyrics(
+                            songmid,
                             keyword, 
                             filename if download_lyrics_flag else None,
                             callback=log,
@@ -453,6 +538,42 @@ def read_lrc_file(lrc_path):
         # 如果 UTF-8 读取失败，尝试使用 GBK 编码
         with open(lrc_path, 'r', encoding='gbk') as f:
             return f.read()
+
+def download_lyrics(songmid, keyword, audio_filename=None, callback=None, return_content=False):
+    """下载歌词的函数，优先使用QQ音乐，失败后尝试网易云
+    Args:
+        songmid: QQ音乐songmid
+        keyword: 搜索关键词
+        audio_filename: 音频文件名(不含路径)，可选
+        callback: 日志回调函数
+        return_content: 是否返回歌词内容而不是保存文件
+    Returns:
+        如果 return_content=True: (成功标志, 歌词内容或错误信息)
+        如果 return_content=False: (成功标志, 歌词文件路径或错误信息)
+    """
+    def log(message):
+        if callback:
+            callback(message)
+        print(message)
+    
+    # 首先尝试使用QQ音乐API（如果keyword是songmid）
+    success, result = download_lyrics_from_qq(
+        songmid,
+        audio_filename,
+        callback=callback,
+        return_content=return_content
+    )
+    if success:
+        return True, result
+    
+    # 如果QQ音乐失败或keyword不是songmid，尝试网易云
+    log("尝试从网易云获取歌词...")
+    return download_lyrics_from_wyy(
+        keyword,
+        audio_filename,
+        callback=callback,
+        return_content=return_content
+    )
 
 def main():
     parser = argparse.ArgumentParser(description='下载QQ音乐歌曲')
