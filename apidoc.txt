@@ -1,0 +1,61 @@
+apiurl: https://api.lolimi.cn/API/qqdg/?word=春庭雪&n=1&q=14
+word 参数是关键词。
+n 参数是搜索结果的序号（ 这是一个可选参数，如果省略则显示所有结果）。
+q 参数是音质，范围是 1-14，音质从差到好。（这也是一个可选参数，如果省略，默认使用最佳音质）
+
+比如我要搜索周杰伦的稻香，显示所有结果。
+
+https://api.lolimi.cn/API/qqdg/?word=稻香
+如果我只要显示第一个结果
+
+https://api.lolimi.cn/API/qqdg/?word=稻香&n=1
+如果我只要显示第一个结果，且音质为 10
+
+https://api.lolimi.cn/API/qqdg/?word=稻香&n=1&q=10
+url 的值就是歌曲的下载链接
+
+返回示例:
+{
+"code": 200,
+"data": {
+"id": 304556298,
+"song": "明明就",
+"subtitle": "",
+"singer": "杨雪婧",
+"album": "明明就",
+"pay": "免费",
+"time": "2021-04-04",
+"bpm": 56,
+"quality": "臻品母带2.0",
+"interval": "4分20秒",
+"size": "165.08MB",
+"kbps": "5315kbps",
+"cover": "https://y.qq.com/music/photo_new/T002R800x800M000003qVmHp2YtIOJ.jpg",
+"link": "https://i.y.qq.com/v8/playsong.html?songmid=002OBnF20s7dEs&type=0",
+"url": "http://ws.stream.qqmusic.qq.com/AI00002gJv7O1JpaSl.flac?guid=0&vkey=AEFB7858F310C76F04D5C808D1971987335D3A03768E93D50F040823E987DC12C9D6E00E0243B9BDE210FA804E3BD803BF65D9377AB15310&uin=347327060&fromtag=120724"
+}
+}
+
+{
+    "code": 200,
+    "data": {
+        "id": 449205,
+        "song": "稻香",
+        "subtitle": "",
+        "singer": "周杰伦",
+        "album": "魔杰座",
+        "pay": "付费",
+        "time": "2008-10-15",
+        "bpm": 82,
+        "quality": "标准音质",
+        "interval": "3分43秒",
+        "size": "5.18MB",
+        "kbps": "192kbps",
+        "cover": "https://y.qq.com/music/photo_new/T002R800x800M000002Neh8l0uciQZ.jpg",
+        "link": "https://i.y.qq.com/v8/playsong.html?songmid=003aAYrm3GE0Ac&type=0",
+        "url": "http://ws.stream.qqmusic.qq.com/C6000020wJDo3cx0j3.m4a?guid=0&vkey=D5C79EA552775AB54D4E7AD19383B8A33397EA091D6FD6A70CB090E1CE665709C9C99C670709550E701CC673E5E66AEFA77AAC6085DEA7F3&uin=2994473309&fromtag=120063"
+    }
+}
+
+apiurl: https://api.lolimi.cn/API/qqdg/?word=春庭雪
+
