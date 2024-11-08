@@ -75,18 +75,35 @@ class MusicDownloaderGUI:
         self.quality_combo = ttk.Combobox(self.single_frame, 
                                         textvariable=self.quality_var,
                                         values=quality_options,
-                                        width=20)
+                                        width=20,
+                                        state='readonly')
         self.quality_combo.grid(row=1, column=1, sticky=tk.W, pady=5)
         
-        # 添加其他音质输入框
+        # 添加其他音质输入框和提示标签
         self.custom_quality_var = tk.StringVar()
-        self.custom_quality_entry = ttk.Entry(self.single_frame, 
+        quality_input_frame = ttk.Frame(self.single_frame)
+        quality_input_frame.grid(row=1, column=2, sticky=tk.W, pady=5)
+        
+        self.custom_quality_entry = ttk.Entry(quality_input_frame, 
                                             textvariable=self.custom_quality_var,
                                             width=10)
-        self.custom_quality_entry.grid(row=1, column=2, sticky=tk.W, pady=5)
-        self.custom_quality_entry.grid_remove()  # 默认隐藏
+        self.custom_quality_entry.pack(side=tk.LEFT, padx=(0, 5))
         
-        self.quality_combo.bind('<<ComboboxSelected>>', self.on_quality_changed)
+        self.quality_hint_label = ttk.Label(quality_input_frame, 
+                                          text="(1-14, 1最低，14最高)",
+                                          foreground='gray')
+        self.quality_hint_label.pack(side=tk.LEFT)
+        
+        # 默认隐藏输入框和提示
+        quality_input_frame.grid_remove()
+        
+        def on_quality_changed(event):
+            if self.quality_combo.get() == "其他":
+                quality_input_frame.grid()
+            else:
+                quality_input_frame.grid_remove()
+        
+        self.quality_combo.bind('<<ComboboxSelected>>', on_quality_changed)
         
         # 搜索结果序号
         ttk.Label(self.single_frame, text="搜索结果序号:").grid(row=2, column=0, sticky=tk.W, pady=5)
@@ -121,18 +138,35 @@ class MusicDownloaderGUI:
         self.batch_quality_combo = ttk.Combobox(self.batch_frame, 
                                         textvariable=self.batch_quality_var,
                                         values=quality_options,
-                                        width=20)
+                                        width=20,
+                                        state='readonly')
         self.batch_quality_combo.grid(row=1, column=1, sticky=tk.W, pady=5)
         
-        # 添加其他音质输入框
+        # 添加其他音质输入框和提示标签
         self.batch_custom_quality_var = tk.StringVar()
-        self.batch_custom_quality_entry = ttk.Entry(self.batch_frame, 
-                                        textvariable=self.batch_custom_quality_var,
-                                        width=10)
-        self.batch_custom_quality_entry.grid(row=1, column=2, sticky=tk.W, pady=5)
-        self.batch_custom_quality_entry.grid_remove()  # 默认隐藏
+        batch_quality_input_frame = ttk.Frame(self.batch_frame)
+        batch_quality_input_frame.grid(row=1, column=2, sticky=tk.W, pady=5)
         
-        self.batch_quality_combo.bind('<<ComboboxSelected>>', self.on_batch_quality_changed)
+        self.batch_custom_quality_entry = ttk.Entry(batch_quality_input_frame, 
+                                                  textvariable=self.batch_custom_quality_var,
+                                                  width=10)
+        self.batch_custom_quality_entry.pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.batch_quality_hint_label = ttk.Label(batch_quality_input_frame, 
+                                                text="(1-14, 1最低，14最高)",
+                                                foreground='gray')
+        self.batch_quality_hint_label.pack(side=tk.LEFT)
+        
+        # 默认隐藏输入框和提示
+        batch_quality_input_frame.grid_remove()
+        
+        def on_batch_quality_changed(event):
+            if self.batch_quality_combo.get() == "其他":
+                batch_quality_input_frame.grid()
+            else:
+                batch_quality_input_frame.grid_remove()
+        
+        self.batch_quality_combo.bind('<<ComboboxSelected>>', on_batch_quality_changed)
         
         # 批量下载和停止按钮
         button_frame = ttk.Frame(self.batch_frame)
@@ -242,12 +276,6 @@ class MusicDownloaderGUI:
         if file_path:
             self.file_var.set(file_path)
 
-    def on_quality_changed(self, event):
-        if self.quality_combo.get() == "其他":
-            self.custom_quality_entry.grid()
-        else:
-            self.custom_quality_entry.grid_remove()
-
     def get_quality_value(self):
         """获取单曲下载页面的音质值"""
         quality_map = {
@@ -269,13 +297,6 @@ class MusicDownloaderGUI:
                 messagebox.showwarning("警告", "请输入1-14之间的数字")
                 return None
         return quality_map[quality]
-
-    def on_batch_quality_changed(self, event):
-        """批量下载页面音质选择变化处理"""
-        if self.batch_quality_combo.get() == "其他":
-            self.batch_custom_quality_entry.grid()
-        else:
-            self.batch_custom_quality_entry.grid_remove()
 
     def get_batch_quality_value(self):
         """获取批量下载页面的音质值"""
