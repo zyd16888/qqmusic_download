@@ -4,7 +4,7 @@ import argparse
 from urllib.parse import quote, urlparse
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4, MP4Cover
-from mutagen.id3 import ID3, APIC
+from mutagen.id3 import ID3, APIC, USLT
 from mutagen.flac import FLAC, Picture
 from io import BytesIO
 import time
@@ -110,12 +110,16 @@ def download_with_progress(url, filepath, callback=None):
             callback(f"下载出错: {str(e)}")
         return False
 
-def download_lyrics(keyword, audio_filename=None, callback=None):
+def download_lyrics(keyword, audio_filename=None, callback=None, return_content=False):
     """下载歌词的函数
     Args:
         keyword: 搜索关键词
         audio_filename: 音频文件名(不含路径)，可选
         callback: 日志回调函数
+        return_content: 是否返回歌词内容而不是保存文件
+    Returns:
+        如果 return_content=True: (成功标志, 歌词内容或错误信息)
+        如果 return_content=False: (成功标志, 歌词文件路径或错误信息)
     """
     def log(message):
         if callback:
@@ -135,15 +139,35 @@ def download_lyrics(keyword, audio_filename=None, callback=None):
             
         log(f"找到歌词: {data['name']} - {data['author']}")
         
-        # 如果没有提供音频文件名，使用歌曲名和歌手名
+        # 构建歌词内容
+        lyrics_content = f"[ti:{data['name']}]\n"
+        lyrics_content += f"[ar:{data['author']}]\n"
+        lyrics_content += f"[by:lyrics.py]\n\n"
+        
+        lyric_count = 0
+        for line in data["lyric"]:
+            if line["name"].strip():
+                time = line.get("time", "00:00.00")
+                if ':' in time and '.' in time:
+                    minutes, rest = time.split(':')
+                    seconds, milliseconds = rest.split('.')
+                    formatted_time = f"[{int(minutes):02d}:{int(seconds):02d}.{milliseconds[:2]}]"
+                    lyrics_content += f"{formatted_time}{line['name']}\n"
+                else:
+                    lyrics_content += f"[00:00.00]{line['name']}\n"
+                lyric_count += 1
+        
+        if return_content:
+            log(f"歌词获取完成，共 {lyric_count} 行")
+            return True, lyrics_content
+            
+        # 如果需要保存文件
         if not audio_filename:
             lyrics_filename = f"{data['name']} - {data['author']}.lrc"
-            # 替换文件名中的非法字符
             lyrics_filename = "".join(c if c not in r'<>:"/\|?*' else ' ' for c in lyrics_filename)
         else:
             lyrics_filename = os.path.splitext(audio_filename)[0] + '.lrc'
             
-        # 创建downloads文件夹（如果不存在）
         if not os.path.exists('downloads'):
             os.makedirs('downloads')
             
@@ -152,23 +176,8 @@ def download_lyrics(keyword, audio_filename=None, callback=None):
         log(f"正在保存歌词文件: {lyrics_filename}")
         
         with open(output_file, "w", encoding="utf-8") as f:
-            f.write(f"[ti:{data['name']}]\n")
-            f.write(f"[ar:{data['author']}]\n")
-            f.write(f"[by:lyrics.py]\n\n")
+            f.write(lyrics_content)
             
-            lyric_count = 0
-            for line in data["lyric"]:
-                if line["name"].strip():
-                    time = line.get("time", "00:00.00")
-                    if ':' in time and '.' in time:
-                        minutes, rest = time.split(':')
-                        seconds, milliseconds = rest.split('.')
-                        formatted_time = f"[{int(minutes):02d}:{int(seconds):02d}.{milliseconds[:2]}]"
-                        f.write(f"{formatted_time}{line['name']}\n")
-                    else:
-                        f.write(f"[00:00.00]{line['name']}\n")
-                    lyric_count += 1
-                    
         log(f"歌词保存完成，共 {lyric_count} 行")
         return True, output_file
         
@@ -177,7 +186,36 @@ def download_lyrics(keyword, audio_filename=None, callback=None):
         log(error_msg)
         return False, error_msg
 
-def download_song(keyword, n=1, q=11, callback=None, download_lyrics_flag=False):
+def embed_lyrics_to_audio(audio_path, lyrics):
+    """将歌词嵌入到音频文件中"""
+    file_ext = os.path.splitext(audio_path)[1].lower()
+    
+    try:
+        if file_ext == '.mp3':
+            try:
+                audio = ID3(audio_path)
+            except:
+                audio = ID3()
+            
+            audio["USLT"] = USLT(encoding=3, lang="chi", desc="", text=lyrics)
+            audio.save(audio_path)
+            
+        elif file_ext == '.flac':
+            audio = FLAC(audio_path)
+            audio["LYRICS"] = lyrics
+            audio.save()
+            
+        elif file_ext == '.m4a':
+            audio = MP4(audio_path)
+            audio["\xa9lyr"] = lyrics
+            audio.save()
+            
+        return True
+    except Exception as e:
+        print(f"嵌入歌词时发生错误: {str(e)}")
+        return False
+
+def download_song(keyword, n=1, q=11, callback=None, download_lyrics_flag=False, embed_lyrics_flag=False):
     # 修改所有 print 为回调函数调用
     def log(message):
         if callback:
@@ -238,14 +276,28 @@ def download_song(keyword, n=1, q=11, callback=None, download_lyrics_flag=False)
                         log("正在添加封面...")
                         add_cover_to_audio(filepath, song_info['cover'])
                     
-                    # 下载歌词 (使用文件名而不是搜索关键词)
-                    if download_lyrics_flag:
-                        log("正在下载歌词...")
-                        lyrics_success, lyrics_result = download_lyrics(keyword, filename, callback=log)
+                    # 处理歌词
+                    if download_lyrics_flag or embed_lyrics_flag:
+                        log("正在获取歌词...")
+                        lyrics_success, lyrics_result = download_lyrics(
+                            keyword, 
+                            filename if download_lyrics_flag else None,
+                            callback=log,
+                            return_content=embed_lyrics_flag and not download_lyrics_flag
+                        )
+                        
                         if lyrics_success:
-                            log(f"歌词下载成功: {lyrics_result}")
+                            if embed_lyrics_flag:
+                                log("正在嵌入歌词...")
+                                lyrics_content = lyrics_result if not download_lyrics_flag else read_lrc_file(lyrics_result)
+                                if embed_lyrics_to_audio(filepath, lyrics_content):
+                                    log("歌词嵌入成功")
+                                else:
+                                    log("歌词嵌入失败")
+                            else:
+                                log(f"歌词下载完成: {lyrics_result}")
                         else:
-                            log(f"歌词下载失败: {lyrics_result}")
+                            log(f"歌词获取失败: {lyrics_result}")
                     
                     log(f"下载完成！保存在: {filepath}")
                     return True
@@ -349,7 +401,17 @@ def download_from_file(filename, callback=None, stop_event=None, quality=11, dow
     except FileNotFoundError:
         log(f"找不到文件: {filename}")
     except Exception as e:
-        log(f"读取文件���出错: {str(e)}")
+        log(f"读取文件出错: {str(e)}")
+
+def read_lrc_file(lrc_path):
+    """读取 LRC 文件内容"""
+    try:
+        with open(lrc_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except UnicodeDecodeError:
+        # 如果 UTF-8 读取失败，尝试使用 GBK 编码
+        with open(lrc_path, 'r', encoding='gbk') as f:
+            return f.read()
 
 def main():
     parser = argparse.ArgumentParser(description='下载QQ音乐歌曲')

@@ -111,20 +111,31 @@ class MusicDownloaderGUI:
         self.index_spin = ttk.Spinbox(self.single_frame, from_=1, to=10, textvariable=self.index_var, width=10)
         self.index_spin.grid(row=2, column=1, sticky=tk.W, pady=5)
         
-        # 修改歌词下载复选框为单独的下载按钮
-        lyrics_frame = ttk.Frame(self.single_frame)
+        # 修改歌词下载选项
+        lyrics_frame = ttk.LabelFrame(self.single_frame, text="歌词选项", padding="5")
         lyrics_frame.grid(row=2, column=2, sticky=tk.W, pady=5)
         
-        self.download_lyrics_var = tk.BooleanVar(value=False)
-        self.lyrics_checkbox = ttk.Checkbutton(lyrics_frame, 
-                                             text="同时下载歌词",
-                                             variable=self.download_lyrics_var)
-        self.lyrics_checkbox.pack(side=tk.LEFT, padx=(0, 5))
-        
-        self.lyrics_only_btn = ttk.Button(lyrics_frame, 
-                                        text="仅下载歌词",
-                                        command=self.download_lyrics_only)
-        self.lyrics_only_btn.pack(side=tk.LEFT)
+        self.lyrics_option = tk.StringVar(value="no_lyrics")
+        ttk.Radiobutton(lyrics_frame, 
+                        text="不下载歌词",
+                        variable=self.lyrics_option,
+                        value="no_lyrics").pack(anchor=tk.W)
+        ttk.Radiobutton(lyrics_frame, 
+                        text="仅下载歌词",
+                        variable=self.lyrics_option,
+                        value="only_lyrics").pack(anchor=tk.W)
+        ttk.Radiobutton(lyrics_frame, 
+                        text="同时下载歌词与音频",
+                        variable=self.lyrics_option,
+                        value="save_lyrics").pack(anchor=tk.W)
+        ttk.Radiobutton(lyrics_frame, 
+                        text="下载歌词嵌入但不保存",
+                        variable=self.lyrics_option,
+                        value="embed_only").pack(anchor=tk.W)
+        ttk.Radiobutton(lyrics_frame, 
+                        text="下载歌词嵌入并保存",
+                        variable=self.lyrics_option,
+                        value="save_and_embed").pack(anchor=tk.W)
         
         # 下载按钮
         self.download_btn = ttk.Button(self.single_frame, text="下载", command=self.download_single)
@@ -250,16 +261,33 @@ class MusicDownloaderGUI:
         
         def download_thread():
             try:
+                lyrics_option = self.lyrics_option.get()
+                
+                # 如果只下载歌词
+                if lyrics_option == "only_lyrics":
+                    self.log_message(f"开始下载歌词: {song_name}")
+                    success, result = download_lyrics(song_name, callback=self.log_message)
+                    if success:
+                        self.log_message(f"歌词下载完成: {result}")
+                    else:
+                        self.log_message(f"歌词下载失败: {result}")
+                    return
+                
+                # 下载音乐（可能包含歌词）
                 self.log_message(f"开始下载: {song_name}")
                 quality = self.get_quality_value()
                 if quality is None:
                     return
                 
+                download_lyrics_flag = lyrics_option in ("save_lyrics", "save_and_embed")
+                embed_lyrics_flag = lyrics_option in ("embed_only", "save_and_embed")
+                
                 success = download_song(song_name, 
                                      n=self.index_var.get(),
                                      q=quality,
                                      callback=self.log_message,
-                                     download_lyrics_flag=self.download_lyrics_var.get())
+                                     download_lyrics_flag=download_lyrics_flag,
+                                     embed_lyrics_flag=embed_lyrics_flag)
                 if success:
                     self.log_message(f"下载完成: {song_name}")
                 else:
