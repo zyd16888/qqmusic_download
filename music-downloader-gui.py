@@ -168,10 +168,10 @@ class MusicDownloaderGUI:
                                         state='readonly')
         self.batch_quality_combo.grid(row=1, column=1, sticky=tk.W, pady=5)
         
-        # 添加其他音质输入框和提示标签
+        # 将其他音质输入框移到新的一行，并默认隐藏
         self.batch_custom_quality_var = tk.StringVar()
         batch_quality_input_frame = ttk.Frame(self.batch_frame)
-        batch_quality_input_frame.grid(row=1, column=2, sticky=tk.W, pady=5)
+        batch_quality_input_frame.grid(row=1, column=1, sticky=tk.E, pady=5)  # 改为和combo box同一行，但靠右对齐
         
         self.batch_custom_quality_entry = ttk.Entry(batch_quality_input_frame, 
                                                   textvariable=self.batch_custom_quality_var,
@@ -186,6 +186,7 @@ class MusicDownloaderGUI:
         # 默认隐藏输入框和提示
         batch_quality_input_frame.grid_remove()
         
+        # 添加音质选择变化的回调
         def on_batch_quality_changed(event):
             if self.batch_quality_combo.get() == "其他":
                 batch_quality_input_frame.grid()
@@ -194,9 +195,9 @@ class MusicDownloaderGUI:
         
         self.batch_quality_combo.bind('<<ComboboxSelected>>', on_batch_quality_changed)
         
-        # 修改歌词下载选项
+        # 修改歌词选项框的位置
         lyrics_frame = ttk.LabelFrame(self.batch_frame, text="歌词选项", padding="5")
-        lyrics_frame.grid(row=1, column=2, sticky=tk.W, pady=5)
+        lyrics_frame.grid(row=1, column=2, rowspan=2, sticky=tk.W, pady=5)
         
         self.batch_lyrics_option = tk.StringVar(value="no_lyrics")
         ttk.Radiobutton(lyrics_frame, 
@@ -220,9 +221,9 @@ class MusicDownloaderGUI:
                         variable=self.batch_lyrics_option,
                         value="save_and_embed").pack(anchor=tk.W)
         
-        # 批量下载和停止按钮
+        # 修改按钮位置，增加行号和上边距
         button_frame = ttk.Frame(self.batch_frame)
-        button_frame.grid(row=2, column=0, columnspan=3, pady=20)
+        button_frame.grid(row=4, column=0, columnspan=3, pady=(40, 20))  # 改为row=4，增加上边距
         
         self.batch_download_btn = ttk.Button(button_frame, text="开始批量下载", 
                                            command=self.download_batch)
