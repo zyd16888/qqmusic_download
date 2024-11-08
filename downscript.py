@@ -3,6 +3,7 @@ import os
 import argparse
 from urllib.parse import quote, urlparse
 from mutagen.mp3 import MP3
+from mutagen.mp4 import MP4, MP4Cover
 from mutagen.id3 import ID3, APIC
 from mutagen.flac import FLAC, Picture
 from io import BytesIO
@@ -50,6 +51,21 @@ def add_cover_to_audio(filepath, cover_url):
                 audio.save()
             except Exception as e:
                 print(f"添加FLAC封面时出错: {str(e)}")
+                
+        elif filepath.lower().endswith('.m4a'):
+            try:
+                audio = MP4(filepath)
+                # m4a 文件使用 MP4Cover，需要指定图片格式
+                if cover_url.lower().endswith('.png'):
+                    cover = MP4Cover(cover_data, imageformat=MP4Cover.FORMAT_PNG)
+                else:
+                    cover = MP4Cover(cover_data, imageformat=MP4Cover.FORMAT_JPEG)
+                    
+                # 设置封面
+                audio.tags['covr'] = [cover]
+                audio.save()
+            except Exception as e:
+                print(f"添加M4A封面时出错: {str(e)}")
                 
     except Exception as e:
         print(f"下载或处理封面图片时出错: {str(e)}")
