@@ -215,6 +215,30 @@ def embed_lyrics_to_audio(audio_path, lyrics):
         print(f"嵌入歌词时发生错误: {str(e)}")
         return False
 
+def get_audio_metadata(filepath):
+    """从音频文件中获取元数据"""
+    try:
+        file_ext = os.path.splitext(filepath)[1].lower()
+        if file_ext == '.mp3':
+            audio = MP3(filepath)
+            title = audio.get('TIT2', [''])[0]
+            artist = audio.get('TPE1', [''])[0]
+        elif file_ext == '.flac':
+            audio = FLAC(filepath)
+            title = audio.get('title', [''])[0] if audio.get('title') else ''
+            artist = audio.get('artist', [''])[0] if audio.get('artist') else ''
+        elif file_ext == '.m4a':
+            audio = MP4(filepath)
+            title = audio.get('\xa9nam', [''])[0] if audio.get('\xa9nam') else ''
+            artist = audio.get('\xa9ART', [''])[0] if audio.get('\xa9ART') else ''
+        else:
+            return None, None
+            
+        return str(title), str(artist)
+    except Exception as e:
+        print(f"读取音频元数据时出错: {str(e)}")
+        return None, None
+
 def download_song(keyword, n=1, q=11, callback=None, download_lyrics_flag=False, embed_lyrics_flag=False):
     # 修改所有 print 为回调函数调用
     def log(message):
@@ -245,6 +269,7 @@ def download_song(keyword, n=1, q=11, callback=None, download_lyrics_flag=False,
         if data['code'] == 200:
             song_info = data['data']
             song_url = song_info['url']
+            song_link = song_info['link'] # 歌曲链接 https://i.y.qq.com/v8/playsong.html?songmid=003aAYrm3GE0Ac&type=0
             
             # 从URL中获取文件扩展名
             file_extension = os.path.splitext(urlparse(song_url).path)[1]
@@ -254,27 +279,43 @@ def download_song(keyword, n=1, q=11, callback=None, download_lyrics_flag=False,
                 else:
                     file_extension = '.mp3'  # 默认为mp3
             
-            # 构建文件名
-            filename = f"{song_info['song']} - {song_info['singer']}{file_extension}"
-            # 替换文件名中的非法字符
-            filename = "".join(c if c not in r'<>:"/\|?*' else ' ' for c in filename)
-            filepath = os.path.join('downloads', filename)
+            # 构建临时文件名
+            temp_filename = f"temp_{int(time.time())}{file_extension}"
+            temp_filepath = os.path.join('downloads', temp_filename)
             
-            # 下载歌曲
-            log(f"正在下载: {filename}")
-            log(f"音质: {song_info.get('quality', '未知')}")
-            log(f"比特率: {song_info.get('kbps', '未知')}")
-            
-            # 使用线程池来处理下载
+            # 下载到临时文件
             with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(download_with_progress, song_url, filepath, callback=log)
-                result = future.result()  # 等待下载完成
+                future = executor.submit(download_with_progress, song_url, temp_filepath, callback=log)
+                result = future.result()
                 
                 if result:
                     # 添加封面
                     if song_info.get('cover'):
                         log("正在添加封面...")
-                        add_cover_to_audio(filepath, song_info['cover'])
+                        add_cover_to_audio(temp_filepath, song_info['cover'])
+                    
+                    # 从音频文件中读取元数据
+                    title, artist = get_audio_metadata(temp_filepath)
+                    
+                    # 如果能够从文件中获取元数据，使用元数据构建文件名
+                    if title and artist:
+                        filename = f"{title} - {artist}{file_extension}"
+                    else:
+                        # 否则使用API返回的信息
+                        filename = f"{song_info['song']} - {song_info['singer']}{file_extension}"
+                    
+                    # 替换文件名中的非法字符
+                    filename = "".join(c if c not in r'<>:"/\|?*' else ' ' for c in filename)
+                    filepath = os.path.join('downloads', filename)
+                    
+                    # 重命名临时文件
+                    try:
+                        if os.path.exists(filepath):
+                            os.remove(filepath)
+                        os.rename(temp_filepath, filepath)
+                    except Exception as e:
+                        log(f"重命名文件时出错: {str(e)}")
+                        filepath = temp_filepath
                     
                     # 处理歌词
                     if download_lyrics_flag or embed_lyrics_flag:
