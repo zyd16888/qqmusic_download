@@ -207,7 +207,7 @@ def download_lyrics_from_wyy(keyword, audio_filename=None, callback=None, return
         return True, output_file
         
     except Exception as e:
-        error_msg = f"下载歌词时出错: {str(e)}"
+        error_msg = f"下载歌时出错: {str(e)}"
         log(error_msg)
         return False, error_msg
 
@@ -261,8 +261,39 @@ def download_lyrics_from_qq(songmid, audio_filename=None, callback=None, return_
         original_lyric = html.unescape(html.unescape(lyric_json.get("lyric", "")))
         translate_lyric = html.unescape(html.unescape(lyric_json.get("trans", "")))
         
-        # 构建完整歌词内容
-        lyrics_content = original_lyric
+        # 解析原歌词和翻译歌词
+        original_lines = {}
+        translate_lines = {}
+        
+        # 解析原歌词
+        for line in original_lyric.split('\n'):
+            if line.strip() and '[' in line:
+                try:
+                    time_tag = line[line.find('['):line.find(']')+1]
+                    content = line[line.find(']')+1:].strip()
+                    if content:  # 只保存非空内容
+                        original_lines[time_tag] = content
+                except:
+                    continue
+        
+        # 解析翻译歌词
+        if translate_lyric:
+            for line in translate_lyric.split('\n'):
+                if line.strip() and '[' in line:
+                    try:
+                        time_tag = line[line.find('['):line.find(']')+1]
+                        content = line[line.find(']')+1:].strip()
+                        if content:  # 只保存非空内容
+                            translate_lines[time_tag] = content
+                    except:
+                        continue
+        
+        # 合并双语歌词
+        lyrics_content = ""
+        for time_tag, original in original_lines.items():
+            lyrics_content += f"{time_tag}{original}\n"
+            if time_tag in translate_lines:
+                lyrics_content += f"{time_tag}{translate_lines[time_tag]}\n"
         
         # 如果只需要内容，直接返回
         if return_content:
