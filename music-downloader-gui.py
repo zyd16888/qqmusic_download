@@ -111,6 +111,13 @@ class MusicDownloaderGUI:
         self.index_spin = ttk.Spinbox(self.single_frame, from_=1, to=10, textvariable=self.index_var, width=10)
         self.index_spin.grid(row=2, column=1, sticky=tk.W, pady=5)
         
+        # 添加歌词下载复选框
+        self.download_lyrics_var = tk.BooleanVar(value=False)
+        self.lyrics_checkbox = ttk.Checkbutton(self.single_frame, 
+                                             text="同时下载歌词",
+                                             variable=self.download_lyrics_var)
+        self.lyrics_checkbox.grid(row=2, column=2, sticky=tk.W, pady=5)
+        
         # 下载按钮
         self.download_btn = ttk.Button(self.single_frame, text="下载", command=self.download_single)
         self.download_btn.grid(row=3, column=0, columnspan=3, pady=20)
@@ -167,6 +174,13 @@ class MusicDownloaderGUI:
                 batch_quality_input_frame.grid_remove()
         
         self.batch_quality_combo.bind('<<ComboboxSelected>>', on_batch_quality_changed)
+        
+        # 添加歌词下载复选框
+        self.batch_download_lyrics_var = tk.BooleanVar(value=False)
+        self.batch_lyrics_checkbox = ttk.Checkbutton(self.batch_frame, 
+                                                   text="同时下载歌词",
+                                                   variable=self.batch_download_lyrics_var)
+        self.batch_lyrics_checkbox.grid(row=1, column=2, sticky=tk.W, pady=5)
         
         # 批量下载和停止按钮
         button_frame = ttk.Frame(self.batch_frame)
@@ -225,7 +239,8 @@ class MusicDownloaderGUI:
                 success = download_song(song_name, 
                                      n=self.index_var.get(),
                                      q=quality,
-                                     callback=self.log_message)
+                                     callback=self.log_message,
+                                     download_lyrics_flag=self.download_lyrics_var.get())
                 if success:
                     self.log_message(f"下载完成: {song_name}")
                 else:
@@ -258,7 +273,8 @@ class MusicDownloaderGUI:
                 download_from_file(file_path, 
                                 callback=self.log_message,
                                 stop_event=self.stop_event,
-                                quality=quality)
+                                quality=quality,
+                                download_lyrics_flag=self.batch_download_lyrics_var.get())
                 self.log_message("批量下载完成")
             except Exception as e:
                 self.log_message(f"批量下载出错: {str(e)}")

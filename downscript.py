@@ -94,7 +94,64 @@ def download_with_progress(url, filepath, callback=None):
             callback(f"下载出错: {str(e)}")
         return False
 
-def download_song(keyword, n=1, q=11, callback=None):
+def download_lyrics(keyword, audio_filename, callback=None):
+    """下载歌词的函数
+    Args:
+        keyword: 搜索关键词
+        audio_filename: 音频文件名(不含路径)
+        callback: 日志回调函数
+    """
+    def log(message):
+        if callback:
+            callback(message)
+        print(message)
+        
+    url = f"https://api.lolimi.cn/API/wydg/?msg={keyword}&n=1"
+    log(f"正在搜索歌词: {keyword}")
+    
+    try:
+        response = requests.get(url)
+        data = response.json()
+        
+        if data["code"] != 200:
+            log(f"获取歌词失败: {data.get('msg', '未知错误')}")
+            return False, f"获取歌词失败: {data.get('msg', '未知错误')}"
+            
+        log(f"找到歌词: {data['name']} - {data['author']}")
+        
+        # 使用音频文件名作为歌词文件名,仅改变扩展名
+        lyrics_filename = os.path.splitext(audio_filename)[0] + '.lrc'
+        output_file = os.path.join('downloads', lyrics_filename)
+        
+        log(f"正在保存歌词文件: {lyrics_filename}")
+        
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(f"[ti:{data['name']}]\n")
+            f.write(f"[ar:{data['author']}]\n")
+            f.write(f"[by:lyrics.py]\n\n")
+            
+            lyric_count = 0
+            for line in data["lyric"]:
+                if line["name"].strip():
+                    time = line.get("time", "00:00.00")
+                    if ':' in time and '.' in time:
+                        minutes, rest = time.split(':')
+                        seconds, milliseconds = rest.split('.')
+                        formatted_time = f"[{int(minutes):02d}:{int(seconds):02d}.{milliseconds[:2]}]"
+                        f.write(f"{formatted_time}{line['name']}\n")
+                    else:
+                        f.write(f"[00:00.00]{line['name']}\n")
+                    lyric_count += 1
+                    
+        log(f"歌词保存完成，共 {lyric_count} 行")
+        return True, output_file
+        
+    except Exception as e:
+        error_msg = f"下载歌词时出错: {str(e)}"
+        log(error_msg)
+        return False, error_msg
+
+def download_song(keyword, n=1, q=11, callback=None, download_lyrics_flag=False):
     # 修改所有 print 为回调函数调用
     def log(message):
         if callback:
@@ -155,6 +212,15 @@ def download_song(keyword, n=1, q=11, callback=None):
                         log("正在添加封面...")
                         add_cover_to_audio(filepath, song_info['cover'])
                     
+                    # 下载歌词 (使用文件名而不是搜索关键词)
+                    if download_lyrics_flag:
+                        log("正在下载歌词...")
+                        lyrics_success, lyrics_result = download_lyrics(keyword, filename, callback=log)
+                        if lyrics_success:
+                            log(f"歌词下载成功: {lyrics_result}")
+                        else:
+                            log(f"歌词下载失败: {lyrics_result}")
+                    
                     log(f"下载完成！保存在: {filepath}")
                     return True
                 else:
@@ -181,8 +247,15 @@ def get_existing_songs():
             existing_songs.add(song_name)
     return existing_songs
 
-def download_from_file(filename, callback=None, stop_event=None, quality=11):
-    """从文件中读取歌曲列表并下载"""
+def download_from_file(filename, callback=None, stop_event=None, quality=11, download_lyrics_flag=False):
+    """从文件中读取歌曲列表并下载
+    Args:
+        filename: 歌曲列表文件路径
+        callback: 日志回调函数
+        stop_event: 停止事件标志
+        quality: 音质选项
+        download_lyrics_flag: 是否下载歌词
+    """
     def log(message):
         if callback:
             callback(message)
@@ -219,7 +292,7 @@ def download_from_file(filename, callback=None, stop_event=None, quality=11):
                 continue
                 
             log(f"\n[{i}/{total}] 正在下载: {song}")
-            if download_song(song, q=quality, callback=callback):
+            if download_song(song, q=quality, callback=callback, download_lyrics_flag=download_lyrics_flag):
                 success += 1
                 existing_songs.add(song_name)  # 添加到已存在列表
             else:
