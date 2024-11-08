@@ -94,11 +94,11 @@ def download_with_progress(url, filepath, callback=None):
             callback(f"下载出错: {str(e)}")
         return False
 
-def download_lyrics(keyword, audio_filename, callback=None):
+def download_lyrics(keyword, audio_filename=None, callback=None):
     """下载歌词的函数
     Args:
         keyword: 搜索关键词
-        audio_filename: 音频文件名(不含路径)
+        audio_filename: 音频文件名(不含路径)，可选
         callback: 日志回调函数
     """
     def log(message):
@@ -119,8 +119,18 @@ def download_lyrics(keyword, audio_filename, callback=None):
             
         log(f"找到歌词: {data['name']} - {data['author']}")
         
-        # 使用音频文件名作为歌词文件名,仅改变扩展名
-        lyrics_filename = os.path.splitext(audio_filename)[0] + '.lrc'
+        # 如果没有提供音频文件名，使用歌曲名和歌手名
+        if not audio_filename:
+            lyrics_filename = f"{data['name']} - {data['author']}.lrc"
+            # 替换文件名中的非法字符
+            lyrics_filename = "".join(c if c not in r'<>:"/\|?*' else ' ' for c in lyrics_filename)
+        else:
+            lyrics_filename = os.path.splitext(audio_filename)[0] + '.lrc'
+            
+        # 创建downloads文件夹（如果不存在）
+        if not os.path.exists('downloads'):
+            os.makedirs('downloads')
+            
         output_file = os.path.join('downloads', lyrics_filename)
         
         log(f"正在保存歌词文件: {lyrics_filename}")
@@ -323,7 +333,7 @@ def download_from_file(filename, callback=None, stop_event=None, quality=11, dow
     except FileNotFoundError:
         log(f"找不到文件: {filename}")
     except Exception as e:
-        log(f"读取文件时出错: {str(e)}")
+        log(f"读取文件���出错: {str(e)}")
 
 def main():
     parser = argparse.ArgumentParser(description='下载QQ音乐歌曲')

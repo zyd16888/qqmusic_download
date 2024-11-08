@@ -3,7 +3,7 @@ from tkinter import ttk, filedialog, messagebox
 import threading
 from datetime import datetime
 import os
-from downscript import download_song, download_from_file, get_existing_songs
+from downscript import download_song, download_from_file, get_existing_songs, download_lyrics
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -111,12 +111,20 @@ class MusicDownloaderGUI:
         self.index_spin = ttk.Spinbox(self.single_frame, from_=1, to=10, textvariable=self.index_var, width=10)
         self.index_spin.grid(row=2, column=1, sticky=tk.W, pady=5)
         
-        # 添加歌词下载复选框
+        # 修改歌词下载复选框为单独的下载按钮
+        lyrics_frame = ttk.Frame(self.single_frame)
+        lyrics_frame.grid(row=2, column=2, sticky=tk.W, pady=5)
+        
         self.download_lyrics_var = tk.BooleanVar(value=False)
-        self.lyrics_checkbox = ttk.Checkbutton(self.single_frame, 
+        self.lyrics_checkbox = ttk.Checkbutton(lyrics_frame, 
                                              text="同时下载歌词",
                                              variable=self.download_lyrics_var)
-        self.lyrics_checkbox.grid(row=2, column=2, sticky=tk.W, pady=5)
+        self.lyrics_checkbox.pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.lyrics_only_btn = ttk.Button(lyrics_frame, 
+                                        text="仅下载歌词",
+                                        command=self.download_lyrics_only)
+        self.lyrics_only_btn.pack(side=tk.LEFT)
         
         # 下载按钮
         self.download_btn = ttk.Button(self.single_frame, text="下载", command=self.download_single)
@@ -175,12 +183,23 @@ class MusicDownloaderGUI:
         
         self.batch_quality_combo.bind('<<ComboboxSelected>>', on_batch_quality_changed)
         
-        # 添加歌词下载复选框
-        self.batch_download_lyrics_var = tk.BooleanVar(value=False)
-        self.batch_lyrics_checkbox = ttk.Checkbutton(self.batch_frame, 
-                                                   text="同时下载歌词",
-                                                   variable=self.batch_download_lyrics_var)
-        self.batch_lyrics_checkbox.grid(row=1, column=2, sticky=tk.W, pady=5)
+        # 替换原来的歌词下载复选框为单选按钮组
+        lyrics_frame = ttk.LabelFrame(self.batch_frame, text="歌词下载选项", padding="5")
+        lyrics_frame.grid(row=1, column=2, sticky=tk.W, pady=5)
+        
+        self.batch_lyrics_option = tk.StringVar(value="no_lyrics")
+        ttk.Radiobutton(lyrics_frame, 
+                        text="不下载歌词",
+                        variable=self.batch_lyrics_option,
+                        value="no_lyrics").pack(anchor=tk.W)
+        ttk.Radiobutton(lyrics_frame, 
+                        text="同时下载歌词",
+                        variable=self.batch_lyrics_option,
+                        value="with_lyrics").pack(anchor=tk.W)
+        ttk.Radiobutton(lyrics_frame, 
+                        text="仅下载歌词",
+                        variable=self.batch_lyrics_option,
+                        value="only_lyrics").pack(anchor=tk.W)
         
         # 批量下载和停止按钮
         button_frame = ttk.Frame(self.batch_frame)
@@ -258,26 +277,78 @@ class MusicDownloaderGUI:
         if not file_path or not os.path.exists(file_path):
             messagebox.showwarning("警告", "请选择有效的歌曲列表文件")
             return
-            
-        quality = self.get_batch_quality_value()
-        if quality is None:
-            return
-            
+        
+        # 仅当需要下载音乐时才检查音质设置
+        lyrics_option = self.batch_lyrics_option.get()
+        if lyrics_option != "only_lyrics":
+            quality = self.get_batch_quality_value()
+            if quality is None:
+                return
+        else:
+            quality = None
+        
         self.stop_event.clear()
         self.batch_download_btn.state(['disabled'])
         self.stop_btn.state(['!disabled'])
         
         def batch_download_thread():
             try:
-                self.log_message(f"开始批量下载，文件: {file_path}")
-                download_from_file(file_path, 
-                                callback=self.log_message,
-                                stop_event=self.stop_event,
-                                quality=quality,
-                                download_lyrics_flag=self.batch_download_lyrics_var.get())
-                self.log_message("批量下载完成")
+                self.log_message(f"开始批量处理，文件: {file_path}")
+                
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    songs = f.read().splitlines()
+                
+                total = len(songs)
+                success = 0
+                failed = []
+                
+                for i, song in enumerate(songs, 1):
+                    if self.stop_event.is_set():
+                        self.log_message("\n下载已停止")
+                        break
+                    
+                    if not song.strip():  # 跳过空行
+                        continue
+                    
+                    self.log_message(f"\n[{i}/{total}] 处理: {song}")
+                    
+                    try:
+                        if lyrics_option == "only_lyrics":
+                            # 仅下载歌词
+                            success_flag, result = download_lyrics(song, callback=self.log_message)
+                            if success_flag:
+                                success += 1
+                            else:
+                                failed.append(f"{song} (歌词下载失败)")
+                        else:
+                            # 下载音乐（可能包含歌词）
+                            if download_song(song, 
+                                          q=quality,
+                                          callback=self.log_message,
+                                          download_lyrics_flag=(lyrics_option == "with_lyrics")):
+                                success += 1
+                            else:
+                                failed.append(song)
+                    except Exception as e:
+                        self.log_message(f"处理出错: {str(e)}")
+                        failed.append(song)
+                
+                # 处理失败列表
+                if failed:
+                    failed_file = os.path.join(os.path.dirname(file_path), 'failed_downloads.txt')
+                    self.log_message("\n以下项目处理失败:")
+                    with open(failed_file, 'w', encoding='utf-8') as f:
+                        for item in failed:
+                            f.write(f"{item}\n")
+                            self.log_message(f"- {item}")
+                    self.log_message(f"\n失败列表已保存到: {failed_file}")
+                
+                self.log_message(f"\n批量处理完成！")
+                self.log_message(f"成功: {success}")
+                self.log_message(f"失败: {len(failed)}")
+                
             except Exception as e:
-                self.log_message(f"批量下载出错: {str(e)}")
+                self.log_message(f"批量处理出错: {str(e)}")
             finally:
                 self.root.after(0, lambda: self.batch_download_btn.state(['!disabled']))
                 self.root.after(0, lambda: self.stop_btn.state(['disabled']))
@@ -340,6 +411,30 @@ class MusicDownloaderGUI:
         self.stop_event.set()
         self.log_message("正在停止下载...")
         self.stop_btn.state(['disabled'])
+
+    def download_lyrics_only(self):
+        """仅下载歌词的处理函数"""
+        song_name = self.search_var.get().strip()
+        if not song_name:
+            messagebox.showwarning("警告", "请输入歌曲名称")
+            return
+            
+        self.lyrics_only_btn.state(['disabled'])
+        
+        def download_thread():
+            try:
+                self.log_message(f"开始下载歌词: {song_name}")
+                success, result = download_lyrics(song_name, callback=self.log_message)
+                if success:
+                    self.log_message(f"歌词下载完成: {result}")
+                else:
+                    self.log_message(f"歌词下载失败: {result}")
+            except Exception as e:
+                self.log_message(f"歌词下载出错: {str(e)}")
+            finally:
+                self.root.after(0, lambda: self.lyrics_only_btn.state(['!disabled']))
+        
+        threading.Thread(target=download_thread, daemon=True).start()
 
 def main():
     root = tk.Tk()
