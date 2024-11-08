@@ -6,6 +6,9 @@ from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, APIC
 from mutagen.flac import FLAC, Picture
 from io import BytesIO
+import time
+import humanize  # 用于格式化文件大小
+from concurrent.futures import ThreadPoolExecutor
 
 def add_cover_to_audio(filepath, cover_url):
     # 下载封面
@@ -50,6 +53,46 @@ def add_cover_to_audio(filepath, cover_url):
                 
     except Exception as e:
         print(f"下载或处理封面图片时出错: {str(e)}")
+
+def download_with_progress(url, filepath, callback=None):
+    """带进度和速度显示的下载函数"""
+    try:
+        response = requests.get(url, stream=True)
+        total_size = int(response.headers.get('content-length', 0))
+        block_size = 8192  # 增加到 8KB
+        downloaded = 0
+        start_time = time.time()
+        last_update_time = 0  # 上次更新时间
+        
+        with open(filepath, 'wb') as f:
+            for data in response.iter_content(block_size):
+                downloaded += len(data)
+                f.write(data)
+                
+                # 每0.5秒更新一次进度
+                current_time = time.time()
+                if current_time - last_update_time >= 0.5:
+                    duration = current_time - start_time
+                    if duration > 0:
+                        speed = downloaded / duration
+                        progress = (downloaded / total_size * 100) if total_size else 0
+                        
+                        speed_text = humanize.naturalsize(speed) + '/s'
+                        progress_text = f"{progress:.1f}%" if total_size else "未知"
+                        
+                        if callback:
+                            callback(f"下载进度: {progress_text} | 速度: {speed_text}")
+                            
+                    last_update_time = current_time
+        
+        if callback:
+            callback("下载完成！")
+        return True
+        
+    except Exception as e:
+        if callback:
+            callback(f"下载出错: {str(e)}")
+        return False
 
 def download_song(keyword, n=1, q=11, callback=None):
     # 修改所有 print 为回调函数调用
@@ -101,18 +144,21 @@ def download_song(keyword, n=1, q=11, callback=None):
             log(f"音质: {song_info.get('quality', '未知')}")
             log(f"比特率: {song_info.get('kbps', '未知')}")
             
-            song_response = requests.get(song_url)
-            
-            with open(filepath, 'wb') as f:
-                f.write(song_response.content)
-            
-            # 添加封面
-            if song_info.get('cover'):
-                log("正在添加封面...")
-                add_cover_to_audio(filepath, song_info['cover'])
-            
-            log(f"下载完成！保存在: {filepath}")
-            return True
+            # 使用线程池来处理下载
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(download_with_progress, song_url, filepath, callback=log)
+                result = future.result()  # 等待下载完成
+                
+                if result:
+                    # 添加封面
+                    if song_info.get('cover'):
+                        log("正在添加封面...")
+                        add_cover_to_audio(filepath, song_info['cover'])
+                    
+                    log(f"下载完成！保存在: {filepath}")
+                    return True
+                else:
+                    return False
             
         else:
             log(f"获取歌曲信息失败: {data.get('msg', '未知错误')}")

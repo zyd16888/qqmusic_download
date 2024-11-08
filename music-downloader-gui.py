@@ -4,6 +4,8 @@ import threading
 from datetime import datetime
 import os
 from downscript import download_song, download_from_file, get_existing_songs
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 class MusicDownloaderGUI:
     def __init__(self, root):
@@ -50,6 +52,8 @@ class MusicDownloaderGUI:
         self.log_frame.rowconfigure(0, weight=1)
         
         self.stop_event = threading.Event()
+        self.last_progress_line = None
+        self.last_update_time = 0
 
     def setup_single_download_page(self):
         # 搜索框
@@ -144,9 +148,28 @@ class MusicDownloaderGUI:
         self.stop_btn.grid(row=0, column=1, padx=5)
 
     def log_message(self, message):
-        """添加日志消息到文本框"""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.log_text.insert(tk.END, f"[{timestamp}] {message}\n")
+        """添加日志消息到文本框，支持进度更新"""
+        current_time = time.time()
+        
+        # 对于进度信息，限制更新频率
+        if "下载进度:" in message:
+            if current_time - self.last_update_time < 0.5:  # 限制更新频率
+                return
+            self.last_update_time = current_time
+            
+            # 如果存在上一行进度，删除它
+            if self.last_progress_line is not None:
+                self.log_text.delete(self.last_progress_line, f"{self.last_progress_line}+1line")
+            
+            # 插入新的进度信息（不带时间戳）
+            self.log_text.insert(tk.END, message + "\n")
+            self.last_progress_line = self.log_text.index("end-2c linestart")
+        else:
+            # 普通日志消息（带时间戳）
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.log_text.insert(tk.END, f"[{timestamp}] {message}\n")
+            self.last_progress_line = None
+            
         self.log_text.see(tk.END)
 
     def download_single(self):
