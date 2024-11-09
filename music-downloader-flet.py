@@ -64,11 +64,14 @@ class MusicDownloaderApp:
     def _init_ui(self) -> None:
         """Initialize UI components"""
         self.page.title = "音乐下载器"
-        self.page.theme_mode = ft.ThemeMode.LIGHT
-        self.page.window.width = 800
-        self.page.window.height = 800
+        self.page.fonts = {
+            "可爱泡芙桃子酒": "./fonts/可爱泡芙桃子酒.ttf"
+        }
+        self.page.theme = ft.Theme(font_family="可爱泡芙桃子酒")
+        self.page.window.width = 700
+        self.page.window.height = 870
         # 设置 Maple Mono SC NF 字体
-        self.page.font_family = "Maple Mono SC NF"
+        # self.page.font_family = "兰米粗楷简体"
 
         # Create tabs
         self.tabs = ft.Tabs(
@@ -121,8 +124,10 @@ class MusicDownloaderApp:
                         content=ft.Column(
                             [
                                 ft.Text("下载日志", size=12, weight=ft.FontWeight.BOLD),
+                            
                                 log_container
                             ],
+                            
                             spacing=5,  # 添加垂直间距
                         ),
                         height=300,
@@ -181,7 +186,7 @@ class MusicDownloaderApp:
             content=ft.Column([
                 ft.Radio(value=value, label=text)
                 for text, value in self.LYRICS_OPTIONS
-            ],spacing=2),
+            ],spacing=0),
             value="no_lyrics"
         )
 
@@ -296,7 +301,7 @@ class MusicDownloaderApp:
             content=ft.Column([
                 ft.Radio(value=value, label=text)
                 for text, value in self.LYRICS_OPTIONS
-            ],spacing=2),
+            ],spacing=0),
             value="no_lyrics"
         )
 
@@ -536,7 +541,7 @@ class MusicDownloaderApp:
     def _set_batch_buttons_state(self, is_downloading: bool) -> None:
         """Set batch download buttons state"""
         self.batch_download_btn.disabled = is_downloading
-        self.batch_download_btn.style.bgcolor = ft.colors.BLUE_200 if is_downloading else ft.colors.BLUE  # 改为浅蓝色
+        self.batch_download_btn.style.bgcolor = ft.colors.BLUE_200 if is_downloading else ft.colors.BLUE  # 改为浅色
         self.stop_btn.disabled = not is_downloading
         self.page.update()
 
