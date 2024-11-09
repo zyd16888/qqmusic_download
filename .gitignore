@@ -36,3 +36,4 @@ ENV/
 # 项目特定
 downloads/
 *.log 
+*.spec

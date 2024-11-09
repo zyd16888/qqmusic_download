@@ -70,7 +70,7 @@ def save_lyrics_to_lrc(original_lyric, translate_lyric, output_file):
 def main():
     
     try:
-        songmid = "003aAYrm3GE0Ac"
+        songmid = "004BKjtg2SUoWx"
         print(f"获取到 songmid: {songmid}")
         
         # 获取歌词

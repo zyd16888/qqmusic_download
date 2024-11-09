@@ -4,6 +4,7 @@ import os
 import threading
 from datetime import datetime
 from typing import Optional
+import sys
 
 import flet as ft
 
@@ -64,8 +65,16 @@ class MusicDownloaderApp:
     def _init_ui(self) -> None:
         """Initialize UI components"""
         self.page.title = "音乐下载器"
+        # 获取字体文件的绝对路径
+        if getattr(sys, 'frozen', False):
+            # 如果是打包后的可执行文件
+            fonts_dir = os.path.join(sys._MEIPASS, 'fonts')
+        else:
+            # 如果是直接运行 Python 脚本
+            fonts_dir = './fonts'
+        
         self.page.fonts = {
-            "可爱泡芙桃子酒": "./fonts/可爱泡芙桃子酒.ttf"
+            "可爱泡芙桃子酒": os.path.join(fonts_dir, "可爱泡芙桃子酒.ttf")
         }
         self.page.theme = ft.Theme(font_family="可爱泡芙桃子酒")
         self.page.window.width = 700
@@ -457,7 +466,7 @@ class MusicDownloaderApp:
             if success:
                 self.log_message(f"下载完成: {song_name}")
             else:
-                self.log_message(f"下载失败: {song_name}")
+                self.log_message(f"下��失败: {song_name}")
         except Exception as e:
             self.log_message(f"下载出错: {str(e)}")
         finally:
