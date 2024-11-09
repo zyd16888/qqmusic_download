@@ -1,5 +1,4 @@
 import argparse
-import html
 import json
 import os
 import ssl
@@ -18,6 +17,8 @@ from mutagen.flac import FLAC, Picture
 from mutagen.id3 import ID3, APIC, USLT
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4, MP4Cover
+
+import html
 
 
 # 全局配置
@@ -325,8 +326,10 @@ class LyricsManager:
 class MusicInfoFetcher:
     def __init__(self, callback: Optional[Callable] = None):
         self.callback = callback or print
+
     def log(self, message: str):
         self.callback(message)
+
     async def get_song_info(self, keyword: str, n: int = 1, quality: int = 11) -> Optional[SongInfo]:
         """获取歌曲信息"""
         base_url = 'https://api.lolimi.cn/API/qqdg/'
@@ -444,7 +447,7 @@ class MusicDownloader:
             # 重命名文件
             final_filename = self._get_final_filename(song_info)
             final_filepath = config.DOWNLOADS_DIR / final_filename
-            
+
             # 如果文件已存在，添加序号
             counter = 1
             while final_filepath.exists():
@@ -452,7 +455,7 @@ class MusicDownloader:
                 ext = Path(final_filename).suffix
                 final_filepath = config.DOWNLOADS_DIR / f"{base_name} ({counter}){ext}"
                 counter += 1
-            
+
             temp_filepath.rename(final_filepath)
             self.log(f"下载完成！保存在: {final_filepath}")
 
@@ -506,17 +509,56 @@ class BatchDownloader(MusicDownloader):
         super().__init__(callback)
         self.existing_songs: Set[str] = set()
 
+    async def _get_playlist_songs(self, url: str) -> List[str]:
+        """从URL获取歌单列表"""
+        try:
+            api_url = "https://sss.unmeta.cn/songlist"
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Referer": "https://music.unmeta.cn/"
+            }
+            data = {"url": url}
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(api_url, data=data, headers=headers) as response:
+                    if response.status != 200:
+                        raise Exception(f"API请求失败: {response.status}")
+
+                    response_data = await response.json()
+                    if response_data["code"] != 1:
+                        raise Exception(f"获取歌单失败: {response_data['msg']}")
+
+                    self.log(f"成功获取歌单，歌单名: {response_data['data']['name']}")
+                    self.log(f"歌单包含 {response_data['data']['songs_count']} 首歌曲")
+                    return response_data["data"]["songs"]
+
+        except Exception as e:
+            self.log(f"获取歌单失败: {str(e)}")
+            return []
+
     @ensure_downloads_dir
-    async def download_from_file(self, filename: Union[str, Path], quality: int = 11,
+    async def download_from_file(self, file_path: Union[str, Path], quality: int = 11,
                                  download_lyrics: bool = False, embed_lyrics: bool = False,
                                  only_lyrics: bool = False) -> None:
-        """从文件批量下载歌曲"""
+        """从文件或URL批量下载歌曲"""
         try:
             self.log("开始批量下载...")
-            self.log(f"读取文件: {filename}")
-            songs = self._read_song_list(filename)
-            self.existing_songs = self._get_existing_songs()
 
+            # 判断是文件路径还是URL
+            if str(file_path).startswith(('http://', 'https://')):
+                self.log(f"正在获取歌单: {file_path}")
+                songs = await self._get_playlist_songs(file_path)
+            else:
+                self.log(f"读取文件: {file_path}")
+                if not os.path.exists(file_path):
+                    raise FileNotFoundError("找不到指定的文件")
+                songs = self._read_song_list(file_path)
+
+            if not songs:
+                self.log("没有找到要下载的歌曲")
+                return
+
+            self.existing_songs = self._get_existing_songs()
             total = len(songs)
             success = 0
             failed = []
@@ -530,7 +572,7 @@ class BatchDownloader(MusicDownloader):
 
                 song_name = song.split(' - ')[0].strip()
                 if song_name in self.existing_songs:
-                    self.log(f" [{i}/{total}] 歌曲已存在,跳过: {song}")
+                    self.log(f"[{i}/{total}] 歌曲已存在,跳过: {song}")
                     skipped.append(song)
                     continue
 

@@ -1,10 +1,10 @@
 import asyncio
 import logging
 import os
+import sys
 import threading
 from datetime import datetime
 from typing import Optional
-import sys
 
 import flet as ft
 
@@ -67,11 +67,11 @@ class MusicDownloaderApp:
         self.page.title = "音乐下载器"
         # 隐藏原生标题栏
         self.page.window.title_bar_hidden = True
-        
+
         def minimize_window(_):
             self.page.window.minimized = True
             self.page.update()
-        
+
         # 创建自定义标题栏
         title_bar = ft.WindowDragArea(
             content=ft.Container(
@@ -110,7 +110,7 @@ class MusicDownloaderApp:
         else:
             # 如果是直接运行 Python 脚本
             fonts_dir = './fonts'
-        
+
         self.page.fonts = {
             "可爱泡芙桃子酒": os.path.join(fonts_dir, "可爱泡芙桃子酒.ttf")
         }
@@ -236,7 +236,7 @@ class MusicDownloaderApp:
             content=ft.Column([
                 ft.Radio(value=value, label=text)
                 for text, value in self.LYRICS_OPTIONS
-            ],spacing=0),
+            ], spacing=0),
             value="no_lyrics"
         )
 
@@ -264,7 +264,7 @@ class MusicDownloaderApp:
                     ft.Container(
                         content=ft.Row(
                             [
-                                self.quality_dropdown, 
+                                self.quality_dropdown,
                                 self.custom_quality,
                                 self.index_input
                             ],
@@ -299,9 +299,9 @@ class MusicDownloaderApp:
         """Create batch download view"""
         # File selection
         self.file_path_input = ft.TextField(
-            label="歌列表文件",
-            read_only=True,
-            hint_text="每行一个歌曲名称，可加上歌手名获取更加准确的结果",
+            label="歌单链接/歌单文件路径",
+            read_only=False,
+            hint_text="支持QQ音乐/网易云歌单链接 或 点击浏览按钮选择歌曲列表文件",
             border_radius=8,
             expand=True
         )
@@ -317,7 +317,7 @@ class MusicDownloaderApp:
         self.page.overlay.append(self.file_picker)
 
         self.browse_btn = ft.ElevatedButton(
-            "览",
+            "浏览",
             icon=ft.icons.FOLDER_OPEN,
             on_click=lambda _: self.file_picker.pick_files(
                 allowed_extensions=["txt"],
@@ -353,7 +353,7 @@ class MusicDownloaderApp:
             content=ft.Column([
                 ft.Radio(value=value, label=text)
                 for text, value in self.LYRICS_OPTIONS
-            ],spacing=0),
+            ], spacing=0),
             value="no_lyrics"
         )
 
@@ -419,7 +419,7 @@ class MusicDownloaderApp:
     def log_message(self, message: str) -> None:
         """Add log message to text field and log file"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+
         # 如果是进度消息
         if "下载进度:" in message:
             # 获取当前日志内容的所有行
@@ -437,9 +437,9 @@ class MusicDownloaderApp:
             # 非进度消息，正常添加新行
             new_value = f"{self.log_text.value or ''}\n[{timestamp}] {message}".strip()
             self.log_text.value = new_value
-        
+
         self.logger.info(message)
-           
+
         self.page.update()
 
     def download_single(self) -> None:
@@ -523,8 +523,8 @@ class MusicDownloaderApp:
         """Handle batch download"""
         try:
             file_path = self.file_path_input.value
-            if not file_path or not os.path.exists(file_path):
-                self.page.show_snack_bar(ft.SnackBar(content=ft.Text("请选择有效的歌曲列表文件")))
+            if not file_path:
+                self.page.show_snack_bar(ft.SnackBar(content=ft.Text("请输入歌单文件路径或歌单URL")))
                 return
 
             lyrics_option = self.batch_lyrics_radio.value
