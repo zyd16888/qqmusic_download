@@ -88,14 +88,28 @@ class MusicDownloaderApp:
         )
 
         # Create log view
-        self.log_text = ft.TextField(
-            multiline=True,
-            read_only=True,
-            min_lines=12,
-            max_lines=12,
-            border_color=ft.colors.GREY_400,
-            text_size=12,
+        self.log_text = ft.Text(
+            size=12,
+            selectable=True,
+            no_wrap=True,
             value=""
+        )
+
+        # 使用 ListView 替代 Column
+        self.log_view = ft.ListView(
+            [self.log_text],
+            expand=1,
+            spacing=10,
+            auto_scroll=True
+        )
+
+        log_container = ft.Container(
+            content=self.log_view,
+            bgcolor=ft.colors.WHITE,
+            border=ft.border.all(color=ft.colors.GREY_400),
+            border_radius=8,
+            padding=10,
+            height=200,
         )
 
         # Main layout
@@ -107,14 +121,15 @@ class MusicDownloaderApp:
                         content=ft.Column(
                             [
                                 ft.Text("下载日志", size=14, weight=ft.FontWeight.BOLD),
-                                self.log_text
-                            ]
+                                log_container
+                            ],
+                            spacing=5,  # 添加垂直间距
                         ),
-                        padding=1,
-                        margin=ft.margin.only(top=2)
+                        padding=10,  # 添加内边距
                     )
                 ],
-                expand=True
+                expand=True,
+                spacing=10  # 添加整体垂直间距
             )
         )
 
