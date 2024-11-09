@@ -67,6 +67,8 @@ class MusicDownloaderApp:
         self.page.theme_mode = ft.ThemeMode.LIGHT
         self.page.window.width = 800
         self.page.window.height = 800
+        # 设置 Maple Mono SC NF 字体
+        self.page.font_family = "Maple Mono SC NF"
 
         # Create tabs
         self.tabs = ft.Tabs(
@@ -92,7 +94,8 @@ class MusicDownloaderApp:
             min_lines=8,
             max_lines=8,
             border_color=ft.colors.GREY_400,
-            text_size=14
+            text_size=18,
+            value=""
         )
 
         # Main layout
@@ -103,14 +106,12 @@ class MusicDownloaderApp:
                     ft.Container(
                         content=ft.Column(
                             [
-                                ft.Text("下载日志", size=16, weight=ft.FontWeight.BOLD),
+                                ft.Text("下载日志", size=14, weight=ft.FontWeight.BOLD),
                                 self.log_text
                             ]
                         ),
-                        padding=10,
-                        border=ft.border.all(1, ft.colors.GREY_400),
-                        border_radius=8,
-                        margin=ft.margin.only(top=20)
+                        padding=1,
+                        margin=ft.margin.only(top=2)
                     )
                 ],
                 expand=True
@@ -164,7 +165,7 @@ class MusicDownloaderApp:
             content=ft.Column([
                 ft.Radio(value=value, label=text)
                 for text, value in self.LYRICS_OPTIONS
-            ]),
+            ],spacing=2),
             value="no_lyrics"
         )
 
@@ -175,7 +176,7 @@ class MusicDownloaderApp:
             style=ft.ButtonStyle(
                 color=ft.colors.WHITE,
                 bgcolor=ft.colors.BLUE,
-                padding=3,
+                padding=0,
             ),
             width=200,
             height=50,
@@ -184,35 +185,41 @@ class MusicDownloaderApp:
         return ft.Container(
             content=ft.Column(
                 [
-                    self.search_input,
-                    ft.Row(
-                        [
-                            self.quality_dropdown, 
-                            self.custom_quality,
-                            self.index_input
-                        ],
-                        alignment=ft.MainAxisAlignment.START
+                    ft.Container(
+                        content=self.search_input,
+                        margin=ft.margin.only(bottom=10)
                     ),
-                    ft.Row(
-                        [
-                            ft.Container(
-                                content=ft.Column(
-                                    [
-                                        ft.Text("歌词选项"),
-                                        self.lyrics_radio
-                                    ]
-                                ),
-                            )
-                        ]
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                self.quality_dropdown, 
+                                self.custom_quality,
+                                self.index_input
+                            ],
+                            alignment=ft.MainAxisAlignment.START,
+                            spacing=10  # 添加横向间距
+                        ),
+                        margin=ft.margin.only(bottom=10)
+                    ),
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Text("歌词选项"),
+                                self.lyrics_radio
+                            ],
+                            spacing=5,  # 控制歌词选项的垂直间距
+                            tight=True  # 使列更紧凑
+                        ),
+                        margin=ft.margin.only(bottom=15)
                     ),
                     ft.Container(
                         content=self.download_btn,
                         alignment=ft.alignment.center
                     )
                 ],
-                spacing=5
+                spacing=0  # 移除Column的默认间距，改用Container的margin控制
             ),
-            padding=10
+            padding=20  # 增加整体内边距
         )
 
     def _create_batch_download_view(self) -> ft.Container:
@@ -272,7 +279,7 @@ class MusicDownloaderApp:
             content=ft.Column([
                 ft.Radio(value=value, label=text)
                 for text, value in self.LYRICS_OPTIONS
-            ]),
+            ],spacing=2),
             value="no_lyrics"
         )
 
@@ -296,8 +303,10 @@ class MusicDownloaderApp:
             style=ft.ButtonStyle(
                 color=ft.colors.WHITE,
                 bgcolor=ft.colors.RED,
-                padding=20
-            )
+                padding=3,
+            ),
+            width=150,
+            height=50,
         )
 
         return ft.Container(
@@ -332,14 +341,35 @@ class MusicDownloaderApp:
 
     def log_message(self, message: str) -> None:
         """Add log message to text field and log file"""
-
-        def update_log():
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.log_text.value = f"{self.log_text.value or ''}\n[{timestamp}] {message}"
-            self.logger.info(message)
-            self.page.update()
-
-        self.page.run_on_ui_thread(update_log)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 如果是进度消息
+        if "下载进度:" in message:
+            # 获取当前日志内容的所有行
+            lines = (self.log_text.value or '').split('\n')
+            # 如果有内容且最后一行是进度信息
+            if lines and "下载进度:" in lines[-1]:
+                # 替换最后一行
+                lines[-1] = f"[{timestamp}] {message}"
+                self.log_text.value = '\n'.join(filter(None, lines))
+            else:
+                # 否则添加新的进度行
+                new_value = f"{self.log_text.value or ''}\n[{timestamp}] {message}".strip()
+                self.log_text.value = new_value
+        else:
+            # 非进度消息，正常添加新行
+            new_value = f"{self.log_text.value or ''}\n[{timestamp}] {message}".strip()
+            self.log_text.value = new_value
+        
+        self.logger.info(message)
+        
+        # 自动滚动到底部
+        if self.log_text.value:
+            self.log_text.selection.start = len(self.log_text.value)
+            self.log_text.selection.end = len(self.log_text.value)
+            self.log_text.focus()
+        
+        self.page.update()
 
     def download_single(self) -> None:
         """Handle single download"""
@@ -377,7 +407,7 @@ class MusicDownloaderApp:
             self.log_message(f"下载出错: {str(e)}")
         finally:
             loop.close()
-            self.page.run_on_ui_thread(lambda: setattr(self.download_btn, 'disabled', False))
+            self.download_btn.disabled = False
             self.page.update()
 
     async def _download_single_thread(self, song_name: str) -> None:
@@ -409,6 +439,9 @@ class MusicDownloaderApp:
                 self.log_message(f"下载失败: {song_name}")
         except Exception as e:
             self.log_message(f"下载出错: {str(e)}")
+        finally:
+            self.download_btn.disabled = False
+            self.page.update()
 
     def download_batch(self) -> None:
         """Handle batch download"""
@@ -514,7 +547,7 @@ class MusicDownloaderApp:
         """Stop download"""
         if self.download_thread and self.download_thread.is_alive():
             self.stop_event.set()
-            self.log_message("正在停止下载...")
+            self.log_message("在停止下载...")
             self.stop_btn.disabled = True
             self.page.update()
 
