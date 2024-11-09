@@ -228,7 +228,7 @@ class LyricsManager:
     async def download_lyrics_from_qq(self, song_mid: str, audio_filename: Optional[str] = None,
                                       return_content: bool = False) -> Tuple[bool, str]:
         """从QQ音乐下载歌词"""
-        self.log(f"正在从QQ音乐获取歌词: {song_mid}")
+        self.log(f"正在从QQ音乐获取歌词，歌曲mid: {song_mid}")
         try:
             # song_mid 为0时，先获取歌曲信息
             if song_mid == "0":
@@ -325,13 +325,15 @@ class LyricsManager:
 class MusicInfoFetcher:
     def __init__(self, callback: Optional[Callable] = None):
         self.callback = callback or print
-
+    def log(self, message: str):
+        self.callback(message)
     async def get_song_info(self, keyword: str, n: int = 1, quality: int = 11) -> Optional[SongInfo]:
         """获取歌曲信息"""
         base_url = 'https://api.lolimi.cn/API/qqdg/'
         params = {'word': keyword, 'n': n, 'q': quality}
 
         try:
+            self.log(f"正在获取 {keyword} 的歌曲信息, 序号: {n}, 音质: {quality}")
             async with aiohttp.ClientSession() as session:
                 async with session.get(base_url, params=params) as response:
                     data = await response.json()
@@ -378,6 +380,11 @@ class MusicDownloader:
 
             # 下载音频文件
             if not only_lyrics:
+                # 验证URL是否为空
+                if not song_info.url:
+                    self.log("api返回的URL为空, 请尝试更换音质或序号，或稍后再试")
+                    return False
+
                 temp_filepath = self._get_temp_filepath(song_info.url)
                 if not await self.download_manager.download_with_progress(song_info.url, temp_filepath):
                     return False
@@ -505,6 +512,8 @@ class BatchDownloader(MusicDownloader):
                                  only_lyrics: bool = False) -> None:
         """从文件批量下载歌曲"""
         try:
+            self.log("开始批量下载...")
+            self.log(f"读取文件: {filename}")
             songs = self._read_song_list(filename)
             self.existing_songs = self._get_existing_songs()
 

@@ -65,6 +65,33 @@ class MusicDownloaderApp:
     def _init_ui(self) -> None:
         """Initialize UI components"""
         self.page.title = "音乐下载器"
+        # 隐藏原生标题栏
+        self.page.window.title_bar_hidden = True
+        
+        # 创建自定义标题栏
+        title_bar = ft.WindowDragArea(
+            content=ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Text("音乐下载器", size=16, weight=ft.FontWeight.BOLD),
+                        ft.Container(
+                            expand=True,
+                        ),
+                        ft.IconButton(
+                            icon=ft.icons.CLOSE,
+                            icon_color=ft.colors.BLACK54,
+                            on_click=lambda _: self.page.window_close(),
+                            tooltip="关闭"
+                        ),
+                    ],
+                    spacing=0,
+                ),
+                padding=ft.padding.only(left=15, right=10),
+                # bgcolor=ft.colors.WHITE,
+                height=40,
+            )
+        )
+
         # 获取字体文件的绝对路径
         if getattr(sys, 'frozen', False):
             # 如果是打包后的可执行文件
@@ -79,8 +106,6 @@ class MusicDownloaderApp:
         self.page.theme = ft.Theme(font_family="可爱泡芙桃子酒")
         self.page.window.width = 700
         self.page.window.height = 870
-        # 设置 Maple Mono SC NF 字体
-        # self.page.font_family = "兰米粗楷简体"
 
         # Create tabs
         self.tabs = ft.Tabs(
@@ -128,23 +153,28 @@ class MusicDownloaderApp:
         self.page.add(
             ft.Column(
                 [
-                    self.tabs,
-                    ft.Container(
-                        content=ft.Column(
-                            [
-                                ft.Text("下载日志", size=12, weight=ft.FontWeight.BOLD),
-                            
-                                log_container
-                            ],
-                            
-                            spacing=5,  # 添加垂直间距
-                        ),
-                        height=300,
-                        padding=10,  # 添加内边距
+                    title_bar,
+                    ft.Column(
+                        [
+                            self.tabs,
+                            ft.Container(
+                                content=ft.Column(
+                                    [
+                                        ft.Text("下载日志", size=12, weight=ft.FontWeight.BOLD),
+                                        log_container
+                                    ],
+                                    spacing=5,
+                                ),
+                                height=300,
+                                padding=10,
+                            )
+                        ],
+                        expand=True,
+                        spacing=10
                     )
                 ],
                 expand=True,
-                spacing=10  # 添加整体垂直间距
+                spacing=0  # 减小标题栏与内容的间距
             )
         )
 
@@ -210,6 +240,7 @@ class MusicDownloaderApp:
             ),
             width=200,
             height=50,
+            content=ft.Text("下载", size=16),
         )
 
         return ft.Container(
@@ -234,7 +265,7 @@ class MusicDownloaderApp:
                     ft.Container(
                         content=ft.Column(
                             [
-                                ft.Text("歌词选项"),
+                                ft.Text("控制选项", size=14),
                                 self.lyrics_radio
                             ],
                             spacing=5,  # 控制歌词选项的垂直间距
@@ -325,6 +356,7 @@ class MusicDownloaderApp:
             ),
             width=200,
             height=50,
+            content=ft.Text("开始批量下载", size=16),
         )
 
         self.stop_btn = ft.ElevatedButton(
@@ -338,6 +370,7 @@ class MusicDownloaderApp:
             ),
             width=150,
             height=50,
+            content=ft.Text("停止下载", size=16),
         )
 
         return ft.Container(
@@ -354,7 +387,7 @@ class MusicDownloaderApp:
                     ft.Container(
                         content=ft.Column(
                             [
-                                ft.Text("歌词选项"),
+                                ft.Text("控制选项", size=14),
                                 self.batch_lyrics_radio
                             ]
                         )
@@ -466,7 +499,7 @@ class MusicDownloaderApp:
             if success:
                 self.log_message(f"下载完成: {song_name}")
             else:
-                self.log_message(f"下��失败: {song_name}")
+                self.log_message(f"下载失败: {song_name}")
         except Exception as e:
             self.log_message(f"下载出错: {str(e)}")
         finally:
