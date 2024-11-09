@@ -68,20 +68,30 @@ class MusicDownloaderApp:
         # 隐藏原生标题栏
         self.page.window.title_bar_hidden = True
         
+        def minimize_window(_):
+            self.page.window.minimized = True
+            self.page.update()
+        
         # 创建自定义标题栏
         title_bar = ft.WindowDragArea(
             content=ft.Container(
                 content=ft.Row(
                     [
-                        ft.Text("音乐下载器", size=16, weight=ft.FontWeight.BOLD),
-                        ft.Text("免责声明：本软件仅供学习交流，请勿用于商业用途。", size=8, color=ft.colors.BLACK54),
+                        ft.Text("音乐下载器", size=18, weight=ft.FontWeight.BOLD),
+                        ft.Text("免责声明：本软件仅供学习交流，请勿用于商业用途。", size=9, color=ft.colors.BLACK54),
                         ft.Container(
                             expand=True,
                         ),
                         ft.IconButton(
+                            icon=ft.icons.REMOVE,
+                            icon_color=ft.colors.BLACK54,
+                            on_click=minimize_window,
+                            tooltip="最小化"
+                        ),
+                        ft.IconButton(
                             icon=ft.icons.CLOSE,
                             icon_color=ft.colors.BLACK54,
-                            on_click=lambda _: self.page.window_close(),
+                            on_click=lambda _: self.page.window.close(),
                             tooltip="关闭"
                         ),
                     ],
@@ -143,8 +153,8 @@ class MusicDownloaderApp:
 
         log_container = ft.Container(
             content=self.log_view,
-            bgcolor=ft.colors.WHITE,
-            border=ft.border.all(color=ft.colors.GREY_400),
+            # bgcolor=ft.colors.WHITE,
+            border=ft.border.all(color=ft.colors.GREY_100),
             border_radius=8,
             padding=10,
             expand=True
@@ -184,7 +194,7 @@ class MusicDownloaderApp:
         # Search input
         self.search_input = ft.TextField(
             label="歌曲名称",
-            hint_text="请输入要下载的歌曲名称",
+            hint_text="请输入要下载的歌曲名称 可加上歌手名获取更加准确的结果",
             border_radius=8,
             expand=True
         )
@@ -291,6 +301,7 @@ class MusicDownloaderApp:
         self.file_path_input = ft.TextField(
             label="歌列表文件",
             read_only=True,
+            hint_text="每行一个歌曲名称，可加上歌手名获取更加准确的结果",
             border_radius=8,
             expand=True
         )
@@ -306,7 +317,7 @@ class MusicDownloaderApp:
         self.page.overlay.append(self.file_picker)
 
         self.browse_btn = ft.ElevatedButton(
-            "浏览",
+            "览",
             icon=ft.icons.FOLDER_OPEN,
             on_click=lambda _: self.file_picker.pick_files(
                 allowed_extensions=["txt"],
