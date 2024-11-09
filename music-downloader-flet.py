@@ -74,6 +74,7 @@ class MusicDownloaderApp:
                 content=ft.Row(
                     [
                         ft.Text("音乐下载器", size=16, weight=ft.FontWeight.BOLD),
+                        ft.Text("免责声明：本软件仅供学习交流，请勿用于商业用途。", size=8, color=ft.colors.BLACK54),
                         ft.Container(
                             expand=True,
                         ),
@@ -84,7 +85,7 @@ class MusicDownloaderApp:
                             tooltip="关闭"
                         ),
                     ],
-                    spacing=0,
+                    spacing=10,
                 ),
                 padding=ft.padding.only(left=15, right=10),
                 # bgcolor=ft.colors.WHITE,
