@@ -109,7 +109,7 @@ class MusicDownloaderApp:
             border=ft.border.all(color=ft.colors.GREY_400),
             border_radius=8,
             padding=10,
-            height=200,
+            expand=True
         )
 
         # Main layout
@@ -120,11 +120,12 @@ class MusicDownloaderApp:
                     ft.Container(
                         content=ft.Column(
                             [
-                                ft.Text("下载日志", size=14, weight=ft.FontWeight.BOLD),
+                                ft.Text("下载日志", size=12, weight=ft.FontWeight.BOLD),
                                 log_container
                             ],
                             spacing=5,  # 添加垂直间距
                         ),
+                        height=300,
                         padding=10,  # 添加内边距
                     )
                 ],
@@ -234,7 +235,8 @@ class MusicDownloaderApp:
                 ],
                 spacing=0  # 移除Column的默认间距，改用Container的margin控制
             ),
-            padding=20  # 增加整体内边距
+            margin=ft.margin.only(left=10, top=10, right=10),  # 只设置左、上、右三边的外边距
+            padding=ft.padding.only(left=10, top=0, right=10)  # 只设置左、上、右三边的内边距
         )
 
     def _create_batch_download_view(self) -> ft.Container:
@@ -346,12 +348,13 @@ class MusicDownloaderApp:
                     ft.Row(
                         [self.batch_download_btn, self.stop_btn],
                         alignment=ft.MainAxisAlignment.CENTER,
-                        spacing=20
+                        spacing=10
                     )
                 ],
                 spacing=10
             ),
-            padding=10
+            margin=ft.margin.only(left=10, top=10, right=10),
+            padding=ft.padding.only(left=10, top=0, right=10)  # 只设置左、上、右三边的内边距
         )
 
     def log_message(self, message: str) -> None:
