@@ -508,6 +508,8 @@ class BatchDownloader(MusicDownloader):
     def __init__(self, callback: Optional[Callable] = None):
         super().__init__(callback)
         self.existing_songs: Set[str] = set()
+        self.playlist_dir = config.DOWNLOADS_DIR / 'playlist'
+        self.playlist_dir.mkdir(exist_ok=True)
 
     async def _get_playlist_songs(self, url: str) -> List[str]:
         """从URL获取歌单列表"""
@@ -528,9 +530,28 @@ class BatchDownloader(MusicDownloader):
                     if response_data["code"] != 1:
                         raise Exception(f"获取歌单失败: {response_data['msg']}")
 
-                    self.log(f"成功获取歌单，歌单名: {response_data['data']['name']}")
+                    playlist_name = response_data['data']['name']
+                    songs = response_data["data"]["songs"]
+                    
+                    # 保存歌单
+                    safe_name = "".join(c if c not in r'<>:"/\|?*' else '_' for c in playlist_name)
+                    playlist_file = self.playlist_dir / f"{safe_name}.txt"
+                    
+                    # 如果文件已存在,添加序号
+                    counter = 1
+                    while playlist_file.exists():
+                        playlist_file = self.playlist_dir / f"{safe_name}_{counter}.txt"
+                        counter += 1
+                    
+                    with open(playlist_file, 'w', encoding='utf-8') as f:
+                        for song in songs:
+                            f.write(f"{song}\n")
+                    
+                    self.log(f"成功获取歌单，歌单名: {playlist_name}")
                     self.log(f"歌单包含 {response_data['data']['songs_count']} 首歌曲")
-                    return response_data["data"]["songs"]
+                    self.log(f"歌单已保存至: {playlist_file}")
+                    
+                    return songs
 
         except Exception as e:
             self.log(f"获取歌单失败: {str(e)}")
