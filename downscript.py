@@ -1,714 +1,581 @@
-import requests
-import os
 import argparse
-from urllib.parse import quote, urlparse
+import json
+import os
+import ssl
+import time
+from dataclasses import dataclass
+from functools import wraps
+from pathlib import Path
+from typing import Optional, Tuple, Callable, Dict, Set, List, Union
+from urllib.parse import urlparse
+
+import aiohttp
+import humanize
+import requests
+import urllib3
+from mutagen.flac import FLAC, Picture
+from mutagen.id3 import ID3, APIC, USLT
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4, MP4Cover
-from mutagen.id3 import ID3, APIC, USLT
-from mutagen.flac import FLAC, Picture
-from io import BytesIO
-import time
-import humanize  # 用于格式化文件大小
-from concurrent.futures import ThreadPoolExecutor
-import json
+
 import html
-import urllib3
-import ssl
 
-# 全局禁用SSL验证和警告
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# 创建全局session
-session = requests.Session()
-session.verify = False
-session.trust_env = False
+# 全局配置
+@dataclass
+class Config:
+    DOWNLOADS_DIR: Path = Path('downloads')
+    DEFAULT_QUALITY: int = 11
+    BLOCK_SIZE: int = 8192
+    PROGRESS_UPDATE_INTERVAL: float = 0.5
 
-# 设置默认SSL上下文
-try:
-    # 创建默认SSL上下文
-    default_context = ssl.create_default_context()
-    default_context.set_ciphers("DEFAULT:@SECLEVEL=1")
-    # 应用到session
-    session.mount("https://", requests.adapters.HTTPAdapter(max_retries=3))
-except Exception as e:
-    print(f"SSL配置警告: {str(e)}")
 
-# 替换requests.get为session.get
+config = Config()
+
+
+# SSL配置
+def setup_ssl():
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    session = requests.Session()
+    session.verify = False
+    session.trust_env = False
+
+    try:
+        default_context = ssl.create_default_context()
+        default_context.set_ciphers("DEFAULT:@SECLEVEL=1")
+        session.mount("https://", requests.adapters.HTTPAdapter(max_retries=3))
+    except Exception as e:
+        print(f"SSL配置警告: {str(e)}")
+
+    return session
+
+
+session = setup_ssl()
 requests.get = session.get
 
-def add_cover_to_audio(filepath, cover_url):
-    # 下载封面
-    try:
-        cover_response = requests.get(cover_url)
-        cover_data = cover_response.content
-        
-        # 根据文件扩展名处理不同格式
-        if filepath.lower().endswith('.mp3'):
-            try:
-                audio = MP3(filepath, ID3=ID3)
-                # 添加ID3标签如果不存在
-                if audio.tags is None:
-                    audio.add_tags()
-                # 添加封面
-                audio.tags.add(
-                    APIC(
-                        encoding=3,  # UTF-8
-                        mime='image/jpeg',
-                        type=3,  # 封面图片
-                        desc='Cover',
-                        data=cover_data
-                    )
+
+# 数据类
+@dataclass
+class AudioMetadata:
+    title: Optional[str]
+    artist: Optional[str]
+
+
+@dataclass
+class SongInfo:
+    song: str
+    singer: str
+    url: str
+    cover: Optional[str]
+    songmid: str
+
+
+# 工具装饰器
+def ensure_downloads_dir(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        config.DOWNLOADS_DIR.mkdir(exist_ok=True)
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def log_errors(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            print(f"{func.__name__} 发生错误: {str(e)}")
+            return None
+
+    return wrapper
+
+
+# 音频处理类
+class AudioHandler:
+    def __init__(self, filepath: Union[str, Path]):
+        self.filepath = Path(filepath)
+        self.audio = self._load_audio()
+
+    def _load_audio(self):
+        handlers = {
+            '.mp3': lambda p: MP3(p, ID3=ID3),
+            '.flac': FLAC,
+            '.m4a': MP4
+        }
+        handler = handlers.get(self.filepath.suffix.lower())
+        if not handler:
+            raise ValueError(f"不支持的音频格式: {self.filepath.suffix}")
+        return handler(self.filepath)
+
+    def add_cover(self, cover_data: bytes, mime_type: str = 'image/jpeg') -> bool:
+        try:
+            ext = self.filepath.suffix.lower()
+            if ext == '.mp3':
+                if not hasattr(self.audio, 'tags'):
+                    self.audio.add_tags()
+                self.audio.tags.add(
+                    APIC(encoding=3, mime=mime_type, type=3, desc='Cover', data=cover_data)
                 )
-                audio.save()
-            except Exception as e:
-                print(f"添加MP3封面时出错: {str(e)}")
-                
-        elif filepath.lower().endswith('.flac'):
-            try:
-                audio = FLAC(filepath)
+            elif ext == '.flac':
                 image = Picture()
-                image.type = 3  # 封面图片
-                image.mime = 'image/jpeg'
+                image.type = 3
+                image.mime = mime_type
                 image.desc = 'Cover'
                 image.data = cover_data
-                
-                audio.add_picture(image)
-                audio.save()
-            except Exception as e:
-                print(f"添加FLAC封面时出错: {str(e)}")
-                
-        elif filepath.lower().endswith('.m4a'):
-            try:
-                audio = MP4(filepath)
-                # m4a 文件使用 MP4Cover，需要指定图片格式
-                if cover_url.lower().endswith('.png'):
-                    cover = MP4Cover(cover_data, imageformat=MP4Cover.FORMAT_PNG)
-                else:
-                    cover = MP4Cover(cover_data, imageformat=MP4Cover.FORMAT_JPEG)
-                    
-                # 设置封面
-                audio.tags['covr'] = [cover]
-                audio.save()
-            except Exception as e:
-                print(f"添加M4A封面时出错: {str(e)}")
-                
-    except Exception as e:
-        print(f"下载或处理封面图片时出错: {str(e)}")
+                self.audio.add_picture(image)
+            elif ext == '.m4a':
+                cover_format = MP4Cover.FORMAT_PNG if mime_type.endswith('png') else MP4Cover.FORMAT_JPEG
+                self.audio.tags['covr'] = [MP4Cover(cover_data, imageformat=cover_format)]
 
-def download_with_progress(url, filepath, callback=None):
-    """带进度和速度显示的下载函数"""
-    try:
-        response = requests.get(url, stream=True)
-        total_size = int(response.headers.get('content-length', 0))
-        block_size = 8192  # 增加到 8KB
-        downloaded = 0
-        start_time = time.time()
-        last_update_time = 0  # 上次更新时间
-        
-        with open(filepath, 'wb') as f:
-            for data in response.iter_content(block_size):
-                downloaded += len(data)
-                f.write(data)
-                
-                # 每0.5秒更新一次进度
-                current_time = time.time()
-                if current_time - last_update_time >= 0.5:
-                    duration = current_time - start_time
-                    if duration > 0:
-                        speed = downloaded / duration
-                        progress = (downloaded / total_size * 100) if total_size else 0
-                        
-                        speed_text = humanize.naturalsize(speed) + '/s'
-                        progress_text = f"{progress:.1f}%" if total_size else "未知"
-                        
-                        if callback:
-                            callback(f"下载进度: {progress_text} | 速度: {speed_text}")
-                            
-                    last_update_time = current_time
-        
-        if callback:
-            callback("下载完成！")
-        return True
-        
-    except Exception as e:
-        if callback:
-            callback(f"下载出错: {str(e)}")
-        return False
+            self.audio.save()
+            return True
+        except Exception as e:
+            print(f"添加封面时出错: {str(e)}")
+            return False
 
-def download_lyrics_from_wyy(keyword, audio_filename=None, callback=None, return_content=False):
-    """下载歌词的函数
-    Args:
-        keyword: 搜索关键词
-        audio_filename: 音频文件名(不含路径)，可选
-        callback: 日志回调函数
-        return_content: 是否返回歌词内容而不是保存文件
-    Returns:
-        如果 return_content=True: (成功标志, 歌词内容或错误信息)
-        如果 return_content=False: (成功标志, 歌词文件路径或错误信息)
-    """
-    def log(message):
-        if callback:
-            callback(message)
-        print(message)
-        
-    url = f"https://api.lolimi.cn/API/wydg/?msg={keyword}&n=1"
-    log(f"正在搜索歌词: {keyword}")
-    
-    try:
-        response = requests.get(url)
-        data = response.json()
-        
-        if data["code"] != 200:
-            log(f"获取歌词失败: {data.get('msg', '未知错误')}")
-            return False, f"获取歌词失败: {data.get('msg', '未知错误')}"
-            
-        log(f"找到歌词: {data['name']} - {data['author']}")
-        
-        # 构建歌词内容
-        lyrics_content = f"[ti:{data['name']}]\n"
-        lyrics_content += f"[ar:{data['author']}]\n"
-        lyrics_content += f"[by:lyrics.py]\n\n"
-        
-        lyric_count = 0
-        for line in data["lyric"]:
-            if line["name"].strip():
-                time = line.get("time", "00:00.00")
-                if ':' in time and '.' in time:
-                    minutes, rest = time.split(':')
-                    seconds, milliseconds = rest.split('.')
-                    formatted_time = f"[{int(minutes):02d}:{int(seconds):02d}.{milliseconds[:2]}]"
-                    lyrics_content += f"{formatted_time}{line['name']}\n"
-                else:
-                    lyrics_content += f"[00:00.00]{line['name']}\n"
-                lyric_count += 1
-        
-        if return_content:
-            log(f"歌词获取完成，共 {lyric_count} 行")
-            return True, lyrics_content
-            
-        # 如果需要保存文件
-        if not audio_filename:
-            lyrics_filename = f"{data['name']} - {data['author']}.lrc"
-            lyrics_filename = "".join(c if c not in r'<>:"/\|?*' else ' ' for c in lyrics_filename)
-        else:
-            lyrics_filename = os.path.splitext(audio_filename)[0] + '.lrc'
-            
-        if not os.path.exists('downloads'):
-            os.makedirs('downloads')
-            
-        output_file = os.path.join('downloads', lyrics_filename)
-        
-        log(f"正在保存歌词文件: {lyrics_filename}")
-        
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(lyrics_content)
-            
-        log(f"歌词保存完成，共 {lyric_count} 行")
-        return True, output_file
-        
-    except Exception as e:
-        error_msg = f"下载歌时出错: {str(e)}"
-        log(error_msg)
-        return False, error_msg
+    def add_lyrics(self, lyrics: str) -> bool:
+        try:
+            ext = self.filepath.suffix.lower()
+            if ext == '.mp3':
+                if not hasattr(self.audio, 'tags'):
+                    self.audio.add_tags()
+                self.audio.tags["USLT"] = USLT(encoding=3, lang="chi", desc="", text=lyrics)
+            elif ext == '.flac':
+                self.audio["LYRICS"] = lyrics
+            elif ext == '.m4a':
+                self.audio["\xa9lyr"] = lyrics
 
-def download_lyrics_from_qq(songmid, audio_filename=None, callback=None, return_content=False):
-    """从QQ音乐下载歌词
-    Args:
-        songmid: QQ音乐歌曲ID
-        audio_filename: 音频文件名(不含路径)，仅在需要保存文件时使用
-        callback: 日志回调函数
-        return_content: 是否返回歌词内容而不是保存文件
-    Returns:
-        如果 return_content=True: (成功标志, 歌词内容或错误信息)
-        如果 return_content=False: (成功标志, 歌词文件路径或错误信息)
-    """
-    def log(message):
-        if callback:
-            callback(message)
-        print(message)
-    log(f"正在从QQ音乐获取歌词: {songmid}")
-    try:
-        # 歌词接口
-        lyric_url = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg"
-        
-        # 构造请求参数
-        params = {
-            "nobase64": 1,
-            "songmid": songmid,
-            "platform": "yqq",
-            "inCharset": "utf8",
-            "outCharset": "utf-8",
-            "g_tk": 5381
-        }
-        
-        # 设置请求头
-        headers = {
-            "Referer": "https://y.qq.com/"
-        }
-        
-        response = requests.get(lyric_url, params=params, headers=headers)
-        
-        # 处理返回数据
-        lyric_data = response.text.strip('MusicJsonCallback(').strip(')')
-        lyric_json = json.loads(lyric_data)
-        
-        if lyric_json.get('retcode') != 0:
-            error_msg = "获取歌词失败"
-            log(error_msg)
+            self.audio.save()
+            return True
+        except Exception as e:
+            print(f"添加歌词时出错: {str(e)}")
+            return False
+
+    def get_metadata(self) -> AudioMetadata:
+        try:
+            ext = self.filepath.suffix.lower()
+            if ext == '.mp3':
+                return AudioMetadata(
+                    title=str(self.audio.get('TIT2', [''])[0]),
+                    artist=str(self.audio.get('TPE1', [''])[0])
+                )
+            elif ext == '.flac':
+                return AudioMetadata(
+                    title=self.audio.get('title', [''])[0] if self.audio.get('title') else None,
+                    artist=self.audio.get('artist', [''])[0] if self.audio.get('artist') else None
+                )
+            elif ext == '.m4a':
+                return AudioMetadata(
+                    title=self.audio.get('\xa9nam', [''])[0] if self.audio.get('\xa9nam') else None,
+                    artist=self.audio.get('\xa9ART', [''])[0] if self.audio.get('\xa9ART') else None
+                )
+        except Exception as e:
+            print(f"读取元数据时出错: {str(e)}")
+            return AudioMetadata(None, None)
+
+
+class DownloadManager:
+    def __init__(self, callback: Optional[Callable] = None):
+        self.callback = callback or print
+
+    def log(self, message: str):
+        self.callback(message)
+
+    @ensure_downloads_dir
+    async def download_with_progress(self, url: str, filepath: Path) -> bool:
+        """带进度和速度显示的下载函数"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    total_size = int(response.headers.get('content-length', 0))
+                    downloaded = 0
+                    start_time = time.time()
+                    last_update_time = start_time
+
+                    with open(filepath, 'wb') as f:
+                        async for chunk in response.content.iter_chunked(config.BLOCK_SIZE):
+                            downloaded += len(chunk)
+                            f.write(chunk)
+
+                            current_time = time.time()
+                            if current_time - last_update_time >= config.PROGRESS_UPDATE_INTERVAL:
+                                self._update_progress(downloaded, total_size, start_time, current_time)
+                                last_update_time = current_time
+
+                    self.log("下载完成！")
+                    return True
+
+        except Exception as e:
+            self.log(f"下载出错: {str(e)}")
+            return False
+
+    def _update_progress(self, downloaded: int, total_size: int, start_time: float, current_time: float):
+        duration = current_time - start_time
+        if duration > 0:
+            speed = downloaded / duration
+            progress = (downloaded / total_size * 100) if total_size else 0
+            self.log(f"下载进度: {progress:.1f}% | 速度: {humanize.naturalsize(speed)}/s")
+
+
+class LyricsManager:
+    def __init__(self, callback: Optional[Callable] = None):
+        self.callback = callback or print
+
+    def log(self, message: str):
+        self.callback(message)
+
+    async def download_lyrics_from_qq(self, songmid: str, audio_filename: Optional[str] = None,
+                                      return_content: bool = False) -> Tuple[bool, str]:
+        """从QQ音乐下载歌词"""
+        self.log(f"正在从QQ音乐获取歌词: {songmid}")
+        try:
+            lyric_url = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg"
+            params = {
+                "nobase64": 1,
+                "songmid": songmid,
+                "platform": "yqq",
+                "inCharset": "utf8",
+                "outCharset": "utf-8",
+                "g_tk": 5381
+            }
+            headers = {"Referer": "https://y.qq.com/"}
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(lyric_url, params=params, headers=headers) as response:
+                    lyric_data = await response.text()
+                    lyric_data = lyric_data.strip('MusicJsonCallback()').strip()
+                    lyric_json = json.loads(lyric_data)
+
+                    if lyric_json.get('retcode') != 0:
+                        return False, "获取歌词失败"
+
+                    lyrics_content = self._process_qq_lyrics(
+                        html.unescape(lyric_json.get("lyric", "")),
+                        html.unescape(lyric_json.get("trans", ""))
+                    )
+
+                    if return_content:
+                        return True, lyrics_content
+
+                    return self._save_lyrics(lyrics_content, audio_filename)
+
+        except Exception as e:
+            error_msg = f"下载歌词时出错: {str(e)}"
+            self.log(error_msg)
             return False, error_msg
-            
-        # 获取原歌词和翻译
-        original_lyric = html.unescape(html.unescape(lyric_json.get("lyric", "")))
-        translate_lyric = html.unescape(html.unescape(lyric_json.get("trans", "")))
-        
-        # 解析原歌词和翻译歌词
-        original_lines = {}
-        translate_lines = {}
-        
-        # 解析原歌词
-        for line in original_lyric.split('\n'):
+
+    def _process_qq_lyrics(self, original_lyric: str, translate_lyric: str) -> str:
+        """处理QQ音乐歌词"""
+        original_lines = self._parse_lyric_lines(original_lyric)
+        translate_lines = self._parse_lyric_lines(translate_lyric)
+
+        lyrics_content = []
+        for time_tag, original in original_lines.items():
+            lyrics_content.append(f"{time_tag}{original}")
+            if time_tag in translate_lines:
+                lyrics_content.append(f"{time_tag}{translate_lines[time_tag]}")
+
+        return "\n".join(lyrics_content)
+
+    @staticmethod
+    def _parse_lyric_lines(lyric: str) -> Dict[str, str]:
+        """解析歌词行"""
+        lines = {}
+        for line in lyric.split('\n'):
             if line.strip() and '[' in line:
                 try:
-                    time_tag = line[line.find('['):line.find(']')+1]
-                    content = line[line.find(']')+1:].strip()
-                    if content:  # 只保存非空内容
-                        original_lines[time_tag] = content
+                    time_tag = line[line.find('['):line.find(']') + 1]
+                    content = line[line.find(']') + 1:].strip()
+                    if content:
+                        lines[time_tag] = content
                 except:
                     continue
-        
-        # 解析翻译歌词
-        if translate_lyric:
-            for line in translate_lyric.split('\n'):
-                if line.strip() and '[' in line:
-                    try:
-                        time_tag = line[line.find('['):line.find(']')+1]
-                        content = line[line.find(']')+1:].strip()
-                        if content:  # 只保存非空内容
-                            translate_lines[time_tag] = content
-                    except:
-                        continue
-        
-        # 合并双语歌词
-        lyrics_content = ""
-        for time_tag, original in original_lines.items():
-            lyrics_content += f"{time_tag}{original}\n"
-            if time_tag in translate_lines:
-                lyrics_content += f"{time_tag}{translate_lines[time_tag]}\n"
-        
-        # 如果只需要内容，直接返回
-        if return_content:
-            return True, lyrics_content
-            
-        # 需要保存文件时，audio_filename 是必需的
+        return lines
+
+    @ensure_downloads_dir
+    def _save_lyrics(self, lyrics_content: str, audio_filename: Optional[str]) -> Tuple[bool, str]:
+        """保存歌词到文件"""
         if not audio_filename:
-            error_msg = "保存歌词文件时需要提供音频文件名"
-            log(error_msg)
+            return False, "保存歌词文件时需要提供音频文件名"
+
+        lyrics_filename = Path(audio_filename).with_suffix('.lrc')
+        output_file = config.DOWNLOADS_DIR / lyrics_filename
+
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(lyrics_content)
+            self.log(f"歌词已保存到: {output_file}")
+            return True, str(output_file)
+        except Exception as e:
+            error_msg = f"保存歌词文件时出错: {str(e)}"
+            self.log(error_msg)
             return False, error_msg
-            
-        # 保存到文件
-        if not os.path.exists('downloads'):
-            os.makedirs('downloads')
-            
-        lyrics_filename = os.path.splitext(audio_filename)[0] + '.lrc'
-        output_file = os.path.join('downloads', lyrics_filename)
-        
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.write(lyrics_content)
-            
-        log(f"歌词已保存到: {output_file}")
-        return True, output_file
-        
-    except Exception as e:
-        error_msg = f"下载歌词时出错: {str(e)}"
-        log(error_msg)
-        return False, error_msg
 
-def embed_lyrics_to_audio(audio_path, lyrics):
-    """将歌词嵌入到音频文件中"""
-    file_ext = os.path.splitext(audio_path)[1].lower()
-    
-    try:
-        if file_ext == '.mp3':
-            try:
-                audio = ID3(audio_path)
-            except:
-                audio = ID3()
-            
-            audio["USLT"] = USLT(encoding=3, lang="chi", desc="", text=lyrics)
-            audio.save(audio_path)
-            
-        elif file_ext == '.flac':
-            audio = FLAC(audio_path)
-            audio["LYRICS"] = lyrics
-            audio.save()
-            
-        elif file_ext == '.m4a':
-            audio = MP4(audio_path)
-            audio["\xa9lyr"] = lyrics
-            audio.save()
-            
-        return True
-    except Exception as e:
-        print(f"嵌入歌词时发生错误: {str(e)}")
-        return False
 
-def get_audio_metadata(filepath):
-    """从音频文件中获取元数据"""
-    try:
-        file_ext = os.path.splitext(filepath)[1].lower()
-        if file_ext == '.mp3':
-            audio = MP3(filepath)
-            title = audio.get('TIT2', [''])[0]
-            artist = audio.get('TPE1', [''])[0]
-        elif file_ext == '.flac':
-            audio = FLAC(filepath)
-            title = audio.get('title', [''])[0] if audio.get('title') else ''
-            artist = audio.get('artist', [''])[0] if audio.get('artist') else ''
-        elif file_ext == '.m4a':
-            audio = MP4(filepath)
-            title = audio.get('\xa9nam', [''])[0] if audio.get('\xa9nam') else ''
-            artist = audio.get('\xa9ART', [''])[0] if audio.get('\xa9ART') else ''
-        else:
-            return None, None
-            
-        return str(title), str(artist)
-    except Exception as e:
-        print(f"读取音频元数据时出错: {str(e)}")
-        return None, None
+class MusicDownloader:
+    def __init__(self, callback: Optional[Callable] = None):
+        self.callback = callback or print
+        self.download_manager = DownloadManager(callback)
+        self.lyrics_manager = LyricsManager(callback)
 
-def download_song(keyword, n=1, q=11, callback=None, download_lyrics_flag=False, embed_lyrics_flag=False):
-    # 修改所有 print 为回调函数调用
-    def log(message):
-        if callback:
-            callback(message)
-        print(message)
-    
-    # 创建downloads文件夹（如果不存在）
-    if not os.path.exists('downloads'):
-        os.makedirs('downloads')
-    
-    # 构建API URL
-    base_url = 'https://api.lolimi.cn/API/qqdg/'
-    params = {'word': keyword}
-    if n:
-        params['n'] = n
-    if q:
-        params['q'] = q
-    log(f"请求参数: {params}")
-    
-    try:
-        # 获取歌曲信息
-        response = requests.get(base_url, params=params)
-        data = response.json()
+    def log(self, message: str):
+        self.callback(message)
 
-        log(data)
-        
-        if data['code'] == 200:
-            song_info = data['data']
-            song_url = song_info['url']
-            song_link = song_info['link']  # 歌曲链接 https://i.y.qq.com/v8/playsong.html?songmid=003aAYrm3GE0Ac&type=0
-            songmid = song_link.split('songmid=')[1].split('&')[0]  # 提取songmid
-            
-            # 从URL中获取文件扩展名
-            file_extension = os.path.splitext(urlparse(song_url).path)[1]
-            if not file_extension:
-                if 'flac' in song_url.lower():
-                    file_extension = '.flac'
-                else:
-                    file_extension = '.mp3'  # 默认为mp3
-            
-            # 构建临时文件名
-            temp_filename = f"temp_{int(time.time())}{file_extension}"
-            temp_filepath = os.path.join('downloads', temp_filename)
-            
-            # 下载到临时文件
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(download_with_progress, song_url, temp_filepath, callback=log)
-                result = future.result()
-                
-                if result:
-                    # 添加封面
-                    if song_info.get('cover'):
-                        log("正在添加封面...")
-                        add_cover_to_audio(temp_filepath, song_info['cover'])
-                    
-                    # 从音频文件中读取元数据
-                    title, artist = get_audio_metadata(temp_filepath)
-                    
-                    # 如果能够从文件中获取元数据，使用元数据构建文件名
-                    if title and artist:
-                        filename = f"{title} - {artist}{file_extension}"
-                    else:
-                        # 否则使用API返回的信息
-                        filename = f"{song_info['song']} - {song_info['singer']}{file_extension}"
-                    
-                    # 替换文件名中的非法字符
-                    filename = "".join(c if c not in r'<>:"/\|?*' else ' ' for c in filename)
-                    filepath = os.path.join('downloads', filename)
-                    
-                    # 重命名临时文件
-                    try:
-                        if os.path.exists(filepath):
-                            os.remove(filepath)
-                        os.rename(temp_filepath, filepath)
-                    except Exception as e:
-                        log(f"重命名文件时出错: {str(e)}")
-                        filepath = temp_filepath
-                    
-                    # 处理歌词
-                    if download_lyrics_flag or embed_lyrics_flag:
-                        log("正在获取歌词...")
-                        lyrics_success, lyrics_result = download_lyrics(
-                            songmid,
-                            keyword, 
-                            filename if download_lyrics_flag else None,
-                            callback=log,
-                            return_content=embed_lyrics_flag and not download_lyrics_flag
-                        )
-                        
-                        if lyrics_success:
-                            if embed_lyrics_flag:
-                                log("正在嵌入歌词...")
-                                lyrics_content = lyrics_result if not download_lyrics_flag else read_lrc_file(lyrics_result)
-                                if embed_lyrics_to_audio(filepath, lyrics_content):
-                                    log("歌词嵌入成功")
-                                else:
-                                    log("歌词嵌入失败")
-                            else:
-                                log(f"歌词下载完成: {lyrics_result}")
-                        else:
-                            log(f"歌词获取失败: {lyrics_result}")
-                    
-                    log(f"下载完成！保存在: {filepath}")
-                    return True
-                else:
+    @ensure_downloads_dir
+    async def download_song(self, keyword: str, n: int = 1, quality: int = 11,
+                            download_lyrics: bool = False, embed_lyrics: bool = False,
+                            only_lyrics: bool = False) -> bool:
+        """下载单首歌曲"""
+        try:
+            song_info = await self._get_song_info(keyword, n, quality)
+            if not song_info:
+                return False
+
+            # 下载音频文件
+            if not only_lyrics:
+                temp_filepath = self._get_temp_filepath(song_info.url)
+                if not await self.download_manager.download_with_progress(song_info.url, temp_filepath):
                     return False
-            
-        else:
-            log(f"获取歌曲信息失败: {data.get('msg', '未知错误')}")
+
+                # 处理音频文件
+                success = await self._process_audio_file(temp_filepath, song_info, download_lyrics, embed_lyrics)
+                return success
+
+        except Exception as e:
+            self.log(f"下载失败: {str(e)}")
             return False
-            
-    except Exception as e:
-        log(f"发生错误: {str(e)}")
-        return False
 
-def get_existing_songs():
-    """获取downloads目录下已存在的歌曲名称"""
-    if not os.path.exists('downloads'):
-        return set()
-        
-    existing_songs = set()
-    for filename in os.listdir('downloads'):
-        if filename.endswith(('.mp3', '.flac')):
-            # 提取歌曲名(不包含歌手名)
-            song_name = filename.split(' - ')[0].strip()
-            existing_songs.add(song_name)
-    return existing_songs
+    async def _get_song_info(self, keyword: str, n: int, quality: int) -> Optional[SongInfo]:
+        """获取歌曲信息"""
+        base_url = 'https://api.lolimi.cn/API/qqdg/'
+        params = {'word': keyword, 'n': n, 'q': quality}
 
-def download_from_file(filename, callback=None, stop_event=None, quality=11, 
-                      download_lyrics_flag=False, embed_lyrics_flag=False, lyrics_option="no_lyrics"):
-    """从文件中读取歌曲列表并下载
-    Args:
-        filename: 歌曲列表文件路径
-        callback: 日志回调函数
-        stop_event: 停止事件标志
-        quality: 音质选项
-        download_lyrics_flag: 是否下载歌词文件
-        embed_lyrics_flag: 是否嵌入歌词
-        lyrics_option: 歌词处理选项 ("no_lyrics"/"only_lyrics"/"save_lyrics"/"embed_only"/"save_and_embed")
-    """
-    def log(message):
-        if callback:
-            callback(message)
-        print(message)
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(base_url, params=params) as response:
+                    data = await response.json()
 
-    try:
-        # 尝试不同的编码方式读取文件
+                    if data['code'] != 200:
+                        self.log(f"获取歌曲信息失败: {data.get('msg', '未知错误')}")
+                        return None
+
+                    song_data = data['data']
+                    songmid = song_data['link'].split('songmid=')[1].split('&')[0]
+
+                    return SongInfo(
+                        song=song_data['song'],
+                        singer=song_data['singer'],
+                        url=song_data['url'],
+                        cover=song_data.get('cover'),
+                        songmid=songmid
+                    )
+
+        except Exception as e:
+            self.log(f"获取歌曲信息时出错: {str(e)}")
+            return None
+
+    def _get_temp_filepath(self, url: str) -> Path:
+        """获取临时文件路径"""
+        ext = self._get_audio_extension(url)
+        return config.DOWNLOADS_DIR / f"temp_{int(time.time())}{ext}"
+
+    async def _process_audio_file(self, temp_filepath: Path, song_info: SongInfo,
+                                  download_lyrics: bool, embed_lyrics: bool) -> bool:
+        """处理下载的音频文件"""
+        try:
+            # 添加封面
+            if song_info.cover:
+                self.log("正在添加封面...")
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(song_info.cover) as response:
+                        cover_data = await response.read()
+                        AudioHandler(temp_filepath).add_cover(cover_data)
+
+            # 处理歌词
+            if download_lyrics or embed_lyrics:
+                self.log("正在获取歌词...")
+                lyrics_success, lyrics_content = await self.lyrics_manager.download_lyrics_from_qq(
+                    song_info.songmid,
+                    return_content=True
+                )
+
+                if lyrics_success:
+                    if embed_lyrics:
+                        self.log("正在嵌入歌词...")
+                        AudioHandler(temp_filepath).add_lyrics(lyrics_content)
+
+                    if download_lyrics:
+                        final_filename = self._get_final_filename(song_info)  # 获取完整文件名
+                        await self.lyrics_manager.download_lyrics_from_qq(
+                            song_info.songmid,
+                            audio_filename=final_filename
+                        )
+
+            # 重命名文件
+            final_filename = self._get_final_filename(song_info)  # 获取完整文件名
+            final_filepath = config.DOWNLOADS_DIR / final_filename  # 使用完整文件名创建路径
+            temp_filepath.rename(final_filepath)
+            self.log(f"下载完成！保存在: {final_filepath}")
+
+            return True
+
+        except Exception as e:
+            self.log(f"处理音频文件时出错: {str(e)}")
+            return False
+
+    def _get_final_filename(self, song_info: SongInfo) -> str:
+        """获取最终文件名（包含扩展名）"""
+        # 基础文件名（不含扩展名）
+        base_filename = f"{song_info.song} - {song_info.singer}"
+        # 移除文件名中的非法字符
+        base_filename = "".join(c if c not in r'<>:"/\|?*' else ' ' for c in base_filename)
+        # 获取并添加正确的文件扩展名
+        ext = self._get_audio_extension(song_info.url)
+        return f"{base_filename}{ext}"
+
+    @staticmethod
+    def _get_audio_extension(url: str) -> str:
+        """从URL获取正确的音频文件扩展名"""
+        # 首先尝试从URL路径获取扩展名
+        ext = Path(urlparse(url).path).suffix.lower()
+
+        # 如果URL中没有扩展名，则根据URL中的关键字判断
+        if not ext:
+            if 'flac' in url.lower():
+                ext = '.flac'
+            elif 'm4a' in url.lower():
+                ext = '.m4a'
+            elif 'mp3' in url.lower():
+                ext = '.mp3'
+            else:
+                # 默认使用mp3
+                ext = '.mp3'
+
+        # 确保扩展名是受支持的格式
+        supported_extensions = {'.mp3', '.flac', '.m4a'}
+        if ext not in supported_extensions:
+            ext = '.mp3'  # 默认使用mp3
+
+        return ext
+
+
+class BatchDownloader(MusicDownloader):
+    def __init__(self, callback: Optional[Callable] = None):
+        super().__init__(callback)
+        self.existing_songs: Set[str] = set()
+
+    @ensure_downloads_dir
+    async def download_from_file(self, filename: Union[str, Path], quality: int = 11,
+                                 download_lyrics: bool = False, embed_lyrics: bool = False,
+                                 only_lyrics: bool = False) -> None:
+        """从文件批量下载歌曲"""
+        try:
+            songs = self._read_song_list(filename)
+            self.existing_songs = self._get_existing_songs()
+
+            total = len(songs)
+            success = 0
+            failed = []
+            skipped = []
+
+            self.log(f"共找到 {total} 首歌曲")
+
+            for i, song in enumerate(songs, 1):
+                if not song.strip():
+                    continue
+
+                song_name = song.split(' - ')[0].strip()
+                if song_name in self.existing_songs:
+                    self.log(f" [{i}/{total}] 歌曲已存在,跳过: {song}")
+                    skipped.append(song)
+                    continue
+
+                self.log(f"\n[{i}/{total}] 处理: {song}")
+                if await self.download_song(song, quality=quality,
+                                            download_lyrics=download_lyrics,
+                                            embed_lyrics=embed_lyrics):
+                    success += 1
+                    self.existing_songs.add(song_name)
+                else:
+                    failed.append(song)
+
+            self._report_results(success, failed, skipped)
+
+        except Exception as e:
+            self.log(f"批量下载出错: {str(e)}")
+
+    @staticmethod
+    def _read_song_list(filename: Union[str, Path]) -> List[str]:
+        """读取歌曲列表文件"""
         encodings = ["utf-8", "gbk", "gb2312", "ansi"]
-        content = None
-
         for encoding in encodings:
             try:
                 with open(filename, "r", encoding=encoding) as f:
-                    content = f.read()
-                log(f"成功使用 {encoding} 编码读取文件")
-                break
+                    return [line.strip() for line in f if line.strip()]
             except UnicodeDecodeError:
-                log(f"使用 {encoding} 编码读取失败，尝试下一个编码")
                 continue
+        raise UnicodeDecodeError("无法使用任何支持的编码读取文件")
 
-        if content is None:
-            raise UnicodeDecodeError("无法使用任何支持的编码读取文件")
+    @staticmethod
+    def _get_existing_songs() -> Set[str]:
+        """获取已存在的歌曲"""
+        return Config.DOWNLOADS_DIR.exists() and {
+            filename.split(' - ')[0].strip()
+            for filename in os.listdir(Config.DOWNLOADS_DIR)
+            if filename.endswith(('.mp3', '.flac'))
+        } or set()
 
-        # 将内容分割成行
-        songs = [line.strip() for line in content.splitlines() if line.strip()]
-
-        # 获取已存在的歌曲
-        existing_songs = get_existing_songs()
-
-        total = len(songs)
-        success = 0
-        failed = []
-        skipped = []
-
-        log(f"共找到 {total} 首歌曲")
-        for i, song in enumerate(songs, 1):
-            if stop_event and stop_event.is_set():
-                log("\n下载已停止")
-                break
-
-            if not song.strip():  # 跳过空行
-                continue
-
-            # 提取歌曲名(不包含歌手名)
-            song_name = song.split(' - ')[0].strip()
-
-            # 检查是否已存在
-            if song_name in existing_songs:
-                log(f"\n[{i}/{total}] 歌曲已存在,跳过: {song}")
-                skipped.append(song)
-                continue
-
-            log(f"\n[{i}/{total}] 处理: {song}")
-            
-            try:
-                if lyrics_option == "only_lyrics":
-                    # 仅下载歌词
-                    success_flag, result = download_lyrics(0, song, callback=callback)
-                    if success_flag:
-                        success += 1
-                    else:
-                        failed.append(f"{song} (歌词下载失败)")
-                else:
-                    # 下载音乐（可能包含歌词）
-                    download_lyrics_flag = lyrics_option in ("save_lyrics", "save_and_embed")
-                    embed_lyrics_flag = lyrics_option in ("embed_only", "save_and_embed")
-                    
-                    if download_song(song, 
-                                  q=quality,
-                                  callback=callback,
-                                  download_lyrics_flag=download_lyrics_flag,
-                                  embed_lyrics_flag=embed_lyrics_flag):
-                        success += 1
-                        existing_songs.add(song_name)
-                    else:
-                        failed.append(song)
-            except Exception as e:
-                log(f"处理出错: {str(e)}")
-                failed.append(song)
-
-        # 准备失败列表文件路径
-        failed_file = os.path.join(os.path.dirname(filename), 'failed_downloads.txt')
-
+    def _report_results(self, success: int, failed: List[str], skipped: List[str]):
+        """报告下载结果"""
         if failed:
-            log("\n以下歌曲下载失败:")
-            # 写入失败列表到文件
-            with open(failed_file, 'w', encoding='utf-8') as f:
-                for song in failed:
-                    f.write(f"{song}\n")
-                    log(f"- {song}")
-            log(f"\n失败列表已保存到: {failed_file}")
+            self.log("\n以下歌曲下载失败:")
+            for song in failed:
+                self.log(f"- {song}")
 
         if skipped:
-            log("\n以下歌曲已存在(已跳过):")
+            self.log("\n以下歌曲已存在(已跳过):")
             for song in skipped:
-                log(f"- {song}")
+                self.log(f"- {song}")
 
-        log(f"\n下载完成！")
-        log(f"成功: {success}")
-        log(f"失败: {len(failed)}")
-        log(f"跳过: {len(skipped)}")
+        self.log(f"\n下载完成！")
+        self.log(f"成功: {success}")
+        self.log(f"失败: {len(failed)}")
+        self.log(f"跳过: {len(skipped)}")
 
-    except FileNotFoundError:
-        log(f"找不到文件: {filename}")
-    except Exception as e:
-        log(f"读取文件出错: {str(e)}")
-
-def read_lrc_file(lrc_path):
-    """读取 LRC 文件内容"""
-    try:
-        with open(lrc_path, 'r', encoding='utf-8') as f:
-            return f.read()
-    except UnicodeDecodeError:
-        # 如果 UTF-8 读取失败，尝试使用 GBK 编码
-        with open(lrc_path, 'r', encoding='gbk') as f:
-            return f.read()
-
-def download_lyrics(songmid, keyword, audio_filename=None, callback=None, return_content=False):
-    """下载歌词的函数，优先使用QQ音乐，失败后尝试网易云
-    Args:
-        songmid: QQ音乐songmid，如果为0则需要先搜索获取
-        keyword: 搜索关键词
-        audio_filename: 音频文件名(不含路径)，可选
-        callback: 日志回调函数
-        return_content: 是否返回歌词内容而不是保存文件
-    Returns:
-        如果 return_content=True: (成功标志, 歌词内容或错误信息)
-        如果 return_content=False: (成功标志, 歌词文件路径或错误信息)
-    """
-    def log(message):
-        if callback:
-            callback(message)
-        print(message)
-    print(audio_filename)
-    # 如果songmid为0，先尝试获取真实的songmid
-    if songmid == 0:
-        try:
-            # 构建API URL获取歌曲信息
-            base_url = 'https://api.lolimi.cn/API/qqdg/'
-            params = {'word': keyword, 'n': 1}
-            response = requests.get(base_url, params=params)
-            data = response.json()
-            
-            if data['code'] == 200:
-                song_info = data['data']
-                song_link = song_info['link']  # 获取歌曲链接
-                songmid = song_link.split('songmid=')[1].split('&')[0]  # 提取songmid
-                log(f"已获取歌曲ID: {songmid}")
-                if audio_filename is None:
-                    filename = f"{song_info['song']} - {song_info['singer']}"
-                    filename = "".join(c if c not in r'<>:"/\|?*' else ' ' for c in filename)
-                    audio_filename = filename
-            else:
-                log(f"获取歌曲信息失败: {data.get('msg', '未知错误')}")
-                songmid = None
-        except Exception as e:
-            log(f"获取歌曲信息时出错: {str(e)}")
-            songmid = None
-    
-    # 如果成功获取到songmid，使用QQ音乐API
-    if songmid:
-        success, result = download_lyrics_from_qq(
-            songmid,
-            audio_filename,
-            callback=callback,
-            return_content=return_content
-        )
-        if success:
-            return True, result
-    
-    # 如果QQ音乐失败或未获取到songmid，尝试网易云
-    log("尝试从网易云获取歌词...")
-    return download_lyrics_from_wyy(
-        keyword,
-        audio_filename,
-        callback=callback,
-        return_content=return_content
-    )
 
 def main():
     parser = argparse.ArgumentParser(description='下载QQ音乐歌曲')
     parser.add_argument('input', help='要下载的歌曲名称或歌曲列表文件')
     parser.add_argument('-f', '--file', action='store_true', help='从文件读取歌曲列表')
     parser.add_argument('-n', type=int, default=1, help='搜索结果的序号（可选）')
-    parser.add_argument('-q', type=int, default=11, choices=range(1, 15), help='音质，范围1-14，从差到好（可选）')
-    
+    parser.add_argument('-q', type=int, default=11, choices=range(1, 15),
+                        help='音质，范围1-14，从差到好（可选）')
+    parser.add_argument('--lyrics', action='store_true', help='下载歌词文件')
+    parser.add_argument('--embed-lyrics', action='store_true', help='嵌入歌词到音频文件')
+
     args = parser.parse_args()
-    
+
+    import asyncio
     if args.file:
-        download_from_file(args.input)
+        downloader = BatchDownloader()
+        asyncio.run(downloader.download_from_file(
+            args.input,
+            quality=args.q,
+            download_lyrics=args.lyrics,
+            embed_lyrics=args.embed_lyrics
+        ))
     else:
-        download_song(args.input, args.n, args.q)
+        downloader = MusicDownloader()
+        asyncio.run(downloader.download_song(
+            args.input,
+            args.n,
+            args.q,
+            download_lyrics=args.lyrics,
+            embed_lyrics=args.embed_lyrics
+        ))
+
 
 if __name__ == "__main__":
     main()
