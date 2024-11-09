@@ -435,8 +435,17 @@ class MusicDownloader:
                         )
 
             # 重命名文件
-            final_filename = self._get_final_filename(song_info)  # 获取完整文件名
-            final_filepath = config.DOWNLOADS_DIR / final_filename  # 使用完整文件名创建路径
+            final_filename = self._get_final_filename(song_info)
+            final_filepath = config.DOWNLOADS_DIR / final_filename
+            
+            # 如果文件已存在，添加序号
+            counter = 1
+            while final_filepath.exists():
+                base_name = Path(final_filename).stem
+                ext = Path(final_filename).suffix
+                final_filepath = config.DOWNLOADS_DIR / f"{base_name} ({counter}){ext}"
+                counter += 1
+            
             temp_filepath.rename(final_filepath)
             self.log(f"下载完成！保存在: {final_filepath}")
 

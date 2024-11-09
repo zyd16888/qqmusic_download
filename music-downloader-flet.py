@@ -91,10 +91,10 @@ class MusicDownloaderApp:
         self.log_text = ft.TextField(
             multiline=True,
             read_only=True,
-            min_lines=8,
-            max_lines=8,
+            min_lines=12,
+            max_lines=12,
             border_color=ft.colors.GREY_400,
-            text_size=18,
+            text_size=12,
             value=""
         )
 
@@ -362,13 +362,7 @@ class MusicDownloaderApp:
             self.log_text.value = new_value
         
         self.logger.info(message)
-        
-        # 自动滚动到底部
-        if self.log_text.value:
-            self.log_text.selection.start = len(self.log_text.value)
-            self.log_text.selection.end = len(self.log_text.value)
-            self.log_text.focus()
-        
+           
         self.page.update()
 
     def download_single(self) -> None:
@@ -379,7 +373,9 @@ class MusicDownloaderApp:
                 self.page.show_snack_bar(ft.SnackBar(content=ft.Text("请输入歌曲名称")))
                 return
 
+            # 使用浅蓝色替代灰色
             self.download_btn.disabled = True
+            self.download_btn.style.bgcolor = ft.colors.BLUE_200  # 改为浅蓝色
             self.page.update()
 
             self.download_thread = threading.Thread(
@@ -391,6 +387,7 @@ class MusicDownloaderApp:
         except Exception as e:
             self.log_message(f"启动下载线程时出错: {str(e)}")
             self.download_btn.disabled = False
+            self.download_btn.style.bgcolor = ft.colors.BLUE
             self.page.update()
 
     def _run_async_download_single(self, song_name: str) -> None:
@@ -408,6 +405,7 @@ class MusicDownloaderApp:
         finally:
             loop.close()
             self.download_btn.disabled = False
+            self.download_btn.style.bgcolor = ft.colors.BLUE
             self.page.update()
 
     async def _download_single_thread(self, song_name: str) -> None:
@@ -441,6 +439,7 @@ class MusicDownloaderApp:
             self.log_message(f"下载出错: {str(e)}")
         finally:
             self.download_btn.disabled = False
+            self.download_btn.style.bgcolor = ft.colors.BLUE
             self.page.update()
 
     def download_batch(self) -> None:
@@ -491,7 +490,8 @@ class MusicDownloaderApp:
             self.log_message(f"批量下载出错: {str(e)}")
         finally:
             loop.close()
-            self.page.run_on_ui_thread(lambda: self._set_batch_buttons_state(False))
+            # 直接调用更新按钮状态，不使用run_on_ui_thread
+            self._set_batch_buttons_state(False)
             self.page.update()
 
     async def _download_batch_thread(
@@ -518,6 +518,7 @@ class MusicDownloaderApp:
     def _set_batch_buttons_state(self, is_downloading: bool) -> None:
         """Set batch download buttons state"""
         self.batch_download_btn.disabled = is_downloading
+        self.batch_download_btn.style.bgcolor = ft.colors.BLUE_200 if is_downloading else ft.colors.BLUE  # 改为浅蓝色
         self.stop_btn.disabled = not is_downloading
         self.page.update()
 
