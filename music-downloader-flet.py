@@ -552,7 +552,6 @@ class MusicDownloaderApp:
     def _run_async_download_batch(
             self, file_path: str, quality: Optional[int], lyrics_option: str
     ) -> None:
-        """Run async batch download task wrapper"""
         try:
             if os.name == "nt":
                 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -560,43 +559,34 @@ class MusicDownloaderApp:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-            loop.run_until_complete(
-                self._download_batch_thread(file_path, quality, lyrics_option)
-            )
-        except Exception as e:
-            self.log_message(f"批量下载出错: {str(e)}")
-        finally:
-            loop.close()
-            # 直接调用更新按钮状态，不使用run_on_ui_thread
-            self._set_batch_buttons_state(False)
-            self.page.update()
-
-    async def _download_batch_thread(
-            self, file_path: str, quality: Optional[int], lyrics_option: str
-    ) -> None:
-        """Batch download thread"""
-        try:
-            downloader = BatchDownloader(callback=self.log_message)
+            downloader = BatchDownloader(callback=self.log_message, stop_event=self.stop_event)
 
             download_lyrics = lyrics_option in ("save_lyrics", "save_and_embed")
             embed_lyrics = lyrics_option in ("embed_only", "save_and_embed")
 
-            await downloader.download_from_file(
-                file_path,
-                quality=quality,
-                download_lyrics=download_lyrics,
-                embed_lyrics=embed_lyrics,
-                only_lyrics=lyrics_option == "only_lyrics",
+            loop.run_until_complete(
+                downloader.download_from_file(
+                    file_path,
+                    quality=quality,
+                    download_lyrics=download_lyrics,
+                    embed_lyrics=embed_lyrics,
+                    only_lyrics=lyrics_option == "only_lyrics",
+                )
             )
 
         except Exception as e:
             self.log_message(f"批量下载出错: {str(e)}")
+        finally:
+            loop.close()
+            self._set_batch_buttons_state(False)
+            self.page.update()
 
     def _set_batch_buttons_state(self, is_downloading: bool) -> None:
         """Set batch download buttons state"""
         self.batch_download_btn.disabled = is_downloading
         self.batch_download_btn.style.bgcolor = ft.colors.BLUE_200 if is_downloading else ft.colors.BLUE  # 改为浅色
         self.stop_btn.disabled = not is_downloading
+        self.stop_btn.style.bgcolor = ft.colors.RED if is_downloading else ft.colors.RED_200
         self.page.update()
 
     def _get_quality_value(self) -> Optional[int]:
@@ -625,8 +615,9 @@ class MusicDownloaderApp:
         """Stop download"""
         if self.download_thread and self.download_thread.is_alive():
             self.stop_event.set()
-            self.log_message("在停止下载...")
+            self.log_message("正在停止下载...")
             self.stop_btn.disabled = True
+            self.stop_btn.style.bgcolor = ft.colors.RED_200
             self.page.update()
 
 

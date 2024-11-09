@@ -3,6 +3,7 @@ import json
 import os
 import ssl
 import time
+import threading
 from dataclasses import dataclass
 from functools import wraps
 from pathlib import Path
@@ -505,11 +506,12 @@ class MusicDownloader:
 
 
 class BatchDownloader(MusicDownloader):
-    def __init__(self, callback: Optional[Callable] = None):
+    def __init__(self, callback: Optional[Callable] = None, stop_event: Optional[threading.Event] = None):
         super().__init__(callback)
         self.existing_songs: Set[str] = set()
         self.playlist_dir = config.DOWNLOADS_DIR / 'playlist'
         self.playlist_dir.mkdir(exist_ok=True)
+        self.stop_event = stop_event
 
     async def _get_playlist_songs(self, url: str) -> List[str]:
         """从URL获取歌单列表"""
@@ -588,6 +590,10 @@ class BatchDownloader(MusicDownloader):
             self.log(f"共找到 {total} 首歌曲")
 
             for i, song in enumerate(songs, 1):
+                if self.stop_event and self.stop_event.is_set():
+                    self.log("下载已停止")
+                    break
+
                 if not song.strip():
                     continue
 
@@ -597,7 +603,7 @@ class BatchDownloader(MusicDownloader):
                     skipped.append(song)
                     continue
 
-                self.log(f"\n[{i}/{total}] 处理: {song}")
+                self.log(f"[{i}/{total}] 处理: {song}")
                 if await self.download_song(song, quality=quality,
                                             download_lyrics=download_lyrics,
                                             embed_lyrics=embed_lyrics,
@@ -636,16 +642,16 @@ class BatchDownloader(MusicDownloader):
     def _report_results(self, success: int, failed: List[str], skipped: List[str]):
         """报告下载结果"""
         if failed:
-            self.log("\n以下歌曲下载失败:")
+            self.log("以下歌曲下载失败:")
             for song in failed:
                 self.log(f"- {song}")
 
         if skipped:
-            self.log("\n以下歌曲已存在(已跳过):")
+            self.log("以下歌曲已存在(已跳过):")
             for song in skipped:
                 self.log(f"- {song}")
 
-        self.log(f"\n下载完成！")
+        self.log(f"下载完成！")
         self.log(f"成功: {success}")
         self.log(f"失败: {len(failed)}")
         self.log(f"跳过: {len(skipped)}")
