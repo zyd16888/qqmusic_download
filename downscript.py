@@ -1,4 +1,5 @@
 import argparse
+import html
 import json
 import os
 import ssl
@@ -17,8 +18,6 @@ from mutagen.flac import FLAC, Picture
 from mutagen.id3 import ID3, APIC, USLT
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4, MP4Cover
-
-import html
 
 
 # 全局配置
@@ -226,15 +225,24 @@ class LyricsManager:
     def log(self, message: str):
         self.callback(message)
 
-    async def download_lyrics_from_qq(self, songmid: str, audio_filename: Optional[str] = None,
+    async def download_lyrics_from_qq(self, song_mid: str, audio_filename: Optional[str] = None,
                                       return_content: bool = False) -> Tuple[bool, str]:
         """从QQ音乐下载歌词"""
-        self.log(f"正在从QQ音乐获取歌词: {songmid}")
+        self.log(f"正在从QQ音乐获取歌词: {song_mid}")
         try:
+            # song_mid 为0时，先获取歌曲信息
+            if song_mid == "0":
+                fetcher = MusicInfoFetcher(self.callback)
+                song_info = await fetcher.get_song_info(audio_filename)
+                if not song_info:
+                    return False, "无法获取歌曲信息"
+                song_mid = song_info.songmid
+                self.log(f"重新获取到的歌曲mid: {song_mid}")
+
             lyric_url = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg"
             params = {
                 "nobase64": 1,
-                "songmid": songmid,
+                "songmid": song_mid,
                 "platform": "yqq",
                 "inCharset": "utf8",
                 "outCharset": "utf-8",
@@ -314,40 +322,11 @@ class LyricsManager:
             return False, error_msg
 
 
-class MusicDownloader:
+class MusicInfoFetcher:
     def __init__(self, callback: Optional[Callable] = None):
         self.callback = callback or print
-        self.download_manager = DownloadManager(callback)
-        self.lyrics_manager = LyricsManager(callback)
 
-    def log(self, message: str):
-        self.callback(message)
-
-    @ensure_downloads_dir
-    async def download_song(self, keyword: str, n: int = 1, quality: int = 11,
-                            download_lyrics: bool = False, embed_lyrics: bool = False,
-                            only_lyrics: bool = False) -> bool:
-        """下载单首歌曲"""
-        try:
-            song_info = await self._get_song_info(keyword, n, quality)
-            if not song_info:
-                return False
-
-            # 下载音频文件
-            if not only_lyrics:
-                temp_filepath = self._get_temp_filepath(song_info.url)
-                if not await self.download_manager.download_with_progress(song_info.url, temp_filepath):
-                    return False
-
-                # 处理音频文件
-                success = await self._process_audio_file(temp_filepath, song_info, download_lyrics, embed_lyrics)
-                return success
-
-        except Exception as e:
-            self.log(f"下载失败: {str(e)}")
-            return False
-
-    async def _get_song_info(self, keyword: str, n: int, quality: int) -> Optional[SongInfo]:
+    async def get_song_info(self, keyword: str, n: int = 1, quality: int = 11) -> Optional[SongInfo]:
         """获取歌曲信息"""
         base_url = 'https://api.lolimi.cn/API/qqdg/'
         params = {'word': keyword, 'n': n, 'q': quality}
@@ -358,7 +337,7 @@ class MusicDownloader:
                     data = await response.json()
 
                     if data['code'] != 200:
-                        self.log(f"获取歌曲信息失败: {data.get('msg', '未知错误')}")
+                        self.callback(f"获取歌曲信息失败: {data.get('msg', '未知错误')}")
                         return None
 
                     song_data = data['data']
@@ -373,8 +352,50 @@ class MusicDownloader:
                     )
 
         except Exception as e:
-            self.log(f"获取歌曲信息时出错: {str(e)}")
+            self.callback(f"获取歌曲信息时出错: {str(e)}")
             return None
+
+
+class MusicDownloader:
+    def __init__(self, callback: Optional[Callable] = None):
+        self.callback = callback or print
+        self.download_manager = DownloadManager(callback)
+        self.lyrics_manager = LyricsManager(callback)
+        self.info_fetcher = MusicInfoFetcher(callback)
+
+    def log(self, message: str):
+        self.callback(message)
+
+    @ensure_downloads_dir
+    async def download_song(self, keyword: str, n: int = 1, quality: int = 11,
+                            download_lyrics: bool = False, embed_lyrics: bool = False,
+                            only_lyrics: bool = False) -> bool:
+        """下载单首歌曲"""
+        try:
+            song_info = await self.info_fetcher.get_song_info(keyword, n, quality)
+            if not song_info:
+                return False
+
+            # 下载音频文件
+            if not only_lyrics:
+                temp_filepath = self._get_temp_filepath(song_info.url)
+                if not await self.download_manager.download_with_progress(song_info.url, temp_filepath):
+                    return False
+
+                # 处理音频文件
+                success = await self._process_audio_file(temp_filepath, song_info, download_lyrics, embed_lyrics)
+                return success
+            else:
+                final_filename = self._get_final_filename(song_info)
+                success, _ = await self.lyrics_manager.download_lyrics_from_qq(
+                    song_info.songmid,
+                    audio_filename=final_filename
+                )
+                return success
+
+        except Exception as e:
+            self.log(f"下载失败: {str(e)}")
+            return False
 
     def _get_temp_filepath(self, url: str) -> Path:
         """获取临时文件路径"""
@@ -460,6 +481,9 @@ class MusicDownloader:
 
         return ext
 
+    async def _get_song_info(self, keyword: str, n: int, quality: int) -> Optional[SongInfo]:
+        return await self.info_fetcher.get_song_info(keyword, n, quality)
+
 
 class BatchDownloader(MusicDownloader):
     def __init__(self, callback: Optional[Callable] = None):
@@ -495,7 +519,8 @@ class BatchDownloader(MusicDownloader):
                 self.log(f"\n[{i}/{total}] 处理: {song}")
                 if await self.download_song(song, quality=quality,
                                             download_lyrics=download_lyrics,
-                                            embed_lyrics=embed_lyrics):
+                                            embed_lyrics=embed_lyrics,
+                                            only_lyrics=only_lyrics):
                     success += 1
                     self.existing_songs.add(song_name)
                 else:

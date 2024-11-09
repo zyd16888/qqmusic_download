@@ -324,22 +324,6 @@ class MusicDownloaderGUI:
             lyrics_option = self.lyrics_option.get()
             downloader = MusicDownloader(callback=self.log_message)
 
-            # 如果只下载歌词
-            if lyrics_option == "only_lyrics":
-                self.log_message(f"开始下载歌词: {song_name}")
-                success, lyrics_content = (
-                    await downloader.lyrics_manager.download_lyrics_from_qq(
-                        "0",  # 传入"0"作为songmid
-                        audio_filename=song_name,  # 传入歌名用于获取歌曲信息
-                        return_content=True,
-                    )
-                )
-                if success:
-                    self.log_message(f"歌词下载完成")
-                else:
-                    self.log_message(f"歌词下载失败: {lyrics_content}")
-                return
-
             # 下载音乐（可能包含歌词）
             self.log_message(f"开始下载: {song_name}")
             quality = self._get_quality_value()
@@ -355,6 +339,7 @@ class MusicDownloaderGUI:
                 quality=quality,
                 download_lyrics=download_lyrics,
                 embed_lyrics=embed_lyrics,
+                only_lyrics=lyrics_option == "only_lyrics",
             )
 
             if success:
