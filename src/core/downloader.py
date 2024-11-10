@@ -1,20 +1,22 @@
 import time
-import aiohttp
-import humanize
 from pathlib import Path
 from typing import Optional, Callable
 from urllib.parse import urlparse
 
+import humanize
+
 from .config import config
 from .metadata import SongInfo
+from ..core.network import network
 from ..handlers.audio import AudioHandler
 from ..handlers.lyrics import LyricsManager
 from ..handlers.playlist import MusicInfoFetcher
 from ..utils.decorators import ensure_downloads_dir
-from ..core.network import network
+
 
 class DownloadManager:
     """下载管理器"""
+
     def __init__(self, callback: Optional[Callable] = None):
         self.callback = callback or print
 
@@ -26,25 +28,29 @@ class DownloadManager:
     async def download_with_progress(self, url: str, filepath: Path) -> bool:
         """带进度和速度显示的下载函数"""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
-                    total_size = int(response.headers.get('content-length', 0))
-                    downloaded = 0
-                    start_time = time.time()
-                    last_update_time = start_time
+            client = await network._ensure_async_client()
+            async with client.stream('GET', url) as response:
+                if response.status_code != 200:
+                    self.log(f"下载失败: HTTP状态码 {response.status_code}")
+                    return False
 
-                    with open(filepath, 'wb') as f:
-                        async for chunk in response.content.iter_chunked(config.BLOCK_SIZE):
-                            downloaded += len(chunk)
-                            f.write(chunk)
+                total_size = int(response.headers.get('content-length', 0))
+                downloaded = 0
+                start_time = time.time()
+                last_update_time = start_time
 
-                            current_time = time.time()
-                            if current_time - last_update_time >= config.PROGRESS_UPDATE_INTERVAL:
-                                self._update_progress(downloaded, total_size, start_time, current_time)
-                                last_update_time = current_time
+                with open(filepath, 'wb') as f:
+                    async for chunk in response.aiter_bytes(chunk_size=config.BLOCK_SIZE):
+                        downloaded += len(chunk)
+                        f.write(chunk)
 
-                    self.log("下载完成！")
-                    return True
+                        current_time = time.time()
+                        if current_time - last_update_time >= config.PROGRESS_UPDATE_INTERVAL:
+                            self._update_progress(downloaded, total_size, start_time, current_time)
+                            last_update_time = current_time
+
+                self.log("下载完成！")
+                return True
 
         except Exception as e:
             self.log(f"下载出错: {str(e)}")
@@ -61,6 +67,7 @@ class DownloadManager:
 
 class MusicDownloader:
     """音乐下载器"""
+
     def __init__(self, callback: Optional[Callable] = None):
         self.callback = callback or print
         self.download_manager = DownloadManager(callback)
@@ -73,8 +80,8 @@ class MusicDownloader:
 
     @ensure_downloads_dir
     async def download_song(self, keyword: str, n: int = 1, quality: int = 11,
-                          download_lyrics: bool = False, embed_lyrics: bool = False,
-                          only_lyrics: bool = False) -> bool:
+                            download_lyrics: bool = False, embed_lyrics: bool = False,
+                            only_lyrics: bool = False) -> bool:
         """下载单首歌曲"""
         try:
             song_info = await self.info_fetcher.get_song_info(keyword, n, quality)
@@ -105,7 +112,7 @@ class MusicDownloader:
             return False
 
     async def _process_audio_file(self, temp_filepath: Path, song_info: SongInfo,
-                                download_lyrics: bool, embed_lyrics: bool) -> bool:
+                                  download_lyrics: bool, embed_lyrics: bool) -> bool:
         """处理下载的音频文件"""
         try:
             if song_info.cover:
@@ -188,4 +195,4 @@ class MusicDownloader:
         if ext not in supported_extensions:
             ext = '.mp3'
 
-        return ext 
+        return ext
