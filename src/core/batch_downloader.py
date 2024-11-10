@@ -28,7 +28,7 @@ class BatchDownloader(MusicDownloader):
 
             if file_path.startswith(('http://', 'https://')):
                 self.log(f"正在获取歌单: {file_path}")
-                songs = await self.info_fetcher.get_playlist_songs(file_path)
+                songs = await self.playlist_manager.get_playlist_songs(file_path)
             else:
                 self.log(f"读取文件: {file_path}")
                 if not os.path.exists(file_path):

@@ -10,7 +10,8 @@ from .metadata import SongInfo
 from ..core.network import network
 from ..handlers.audio import AudioHandler
 from ..handlers.lyrics import LyricsManager
-from ..handlers.playlist import MusicInfoFetcher
+from ..handlers.playlist import PlaylistManager
+from ..handlers.musicInfo import MusicInfoFetcher
 from ..utils.decorators import ensure_downloads_dir
 
 
@@ -73,6 +74,7 @@ class MusicDownloader:
         self.download_manager = DownloadManager(callback)
         self.lyrics_manager = LyricsManager(callback)
         self.info_fetcher = MusicInfoFetcher(callback)
+        self.playlist_manager = PlaylistManager(callback)
 
     def log(self, message: str):
         """日志输出"""

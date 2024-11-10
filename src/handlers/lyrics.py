@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from typing import Optional, Callable, Tuple, Dict
 
-from .playlist import MusicInfoFetcher
+from .musicInfo import MusicInfoFetcher
 from ..core.config import config
 from ..core.network import network
 from ..utils.decorators import ensure_downloads_dir

@@ -640,7 +640,7 @@ class MusicDownloaderApp:
         if e.data == "close":
             if self.loop and not self.loop.is_closed():
                 self.loop.close()
-            self.page.window_destroy()
+            self.page.window.destroy()
 
 
 def main():
