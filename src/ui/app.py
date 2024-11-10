@@ -45,6 +45,8 @@ class MusicDownloaderApp:
         self.last_progress_line = None
         self.last_update_time = 0
         self.download_thread: Optional[threading.Thread] = None
+        self.loop = None
+        
 
     def _setup_logger(self) -> None:
         """Set up logging system"""
@@ -469,15 +471,15 @@ class MusicDownloaderApp:
         try:
             if os.name == "nt":
                 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-            loop.run_until_complete(self._download_single_thread(song_name))
+            
+            if self.loop is None or self.loop.is_closed():
+                self.loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self.loop)
+            
+            self.loop.run_until_complete(self._download_single_thread(song_name))
         except Exception as e:
             self.log_message(f"下载出错: {str(e)}")
         finally:
-            loop.close()
             self.download_btn.disabled = False
             self.download_btn.style.bgcolor = ft.colors.BLUE
             self.page.update()
@@ -553,15 +555,16 @@ class MusicDownloaderApp:
             if os.name == "nt":
                 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            if self.loop is None or self.loop.is_closed():
+                self.loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self.loop)
 
             downloader = BatchDownloader(callback=self.log_message, stop_event=self.stop_event)
 
             download_lyrics = lyrics_option in ("save_lyrics", "save_and_embed")
             embed_lyrics = lyrics_option in ("embed_only", "save_and_embed")
 
-            loop.run_until_complete(
+            self.loop.run_until_complete(
                 downloader.download_from_file(
                     file_path,
                     quality=quality,
@@ -574,7 +577,6 @@ class MusicDownloaderApp:
         except Exception as e:
             self.log_message(f"批量下载出错: {str(e)}")
         finally:
-            loop.close()
             self._set_batch_buttons_state(False)
             self.page.update()
 
@@ -617,10 +619,17 @@ class MusicDownloaderApp:
             self.stop_btn.style.bgcolor = ft.colors.RED_200
             self.page.update()
 
+    def on_window_event(self, e):
+        if e.data == "close":
+            if self.loop and not self.loop.is_closed():
+                self.loop.close()
+            self.page.window_destroy()
+
 
 def main():
     def init(page: ft.Page):
         app = MusicDownloaderApp(page)
+        
 
     ft.app(target=init)
 
