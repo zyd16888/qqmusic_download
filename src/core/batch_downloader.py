@@ -5,17 +5,20 @@ from typing import Optional, Callable, Set, List
 from .config import config
 from .downloader import MusicDownloader
 from ..handlers.playlist import PlaylistManager
+from ..handlers.report import DownloadReportManager
 from ..utils.decorators import ensure_downloads_dir
 
 
 class BatchDownloader(MusicDownloader):
     """批量下载器"""
 
-    def __init__(self, callback: Optional[Callable] = None, stop_event: Optional[threading.Event] = None, auto_retry: bool = True):
+    def __init__(self, callback: Optional[Callable] = None, stop_event: Optional[threading.Event] = None,
+                 auto_retry: bool = True):
         super().__init__(callback)
         self.existing_songs: Set[str] = set()
         self.stop_event = stop_event
         self.playlist_manager = PlaylistManager(callback)
+        self.report_manager = DownloadReportManager(config.DOWNLOADS_DIR / 'download_reports', callback)
         self.auto_retry = auto_retry
 
     @ensure_downloads_dir
@@ -93,7 +96,7 @@ class BatchDownloader(MusicDownloader):
             'embed_lyrics': embed_lyrics,
             'only_lyrics': only_lyrics
         }
-        self.playlist_manager.save_download_report(download_results)
+        self.report_manager.save_report(download_results)
         self._report_results(success, failed, skipped)
 
     def _report_results(self, success: int, failed: List[str], skipped: List[str]):
@@ -130,8 +133,8 @@ class BatchDownloader(MusicDownloader):
             return await super().download_song(keyword, n, quality, download_lyrics, embed_lyrics, only_lyrics)
 
         # 定义所有可用的音质等级(从高到低)
-        all_quality_levels = [14, 13,12, 11, 10, 9, 8, 7, 4]
-        
+        all_quality_levels = [14, 13, 12, 11, 10, 9, 8, 7, 4]
+
         # 只使用小于等于用户指定音质的等级
         quality_levels = [q for q in all_quality_levels if q <= quality]
         if not quality_levels:
@@ -147,7 +150,7 @@ class BatchDownloader(MusicDownloader):
             )
             if success:
                 return True
-            
+
             if retry_quality != quality_levels[-1]:
                 self.log("下载失败，尝试降低音质重试...")
 
