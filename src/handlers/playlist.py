@@ -2,6 +2,7 @@ from typing import Optional, Callable, Dict, List
 
 from ..core.config import config
 from ..core.network import network
+from ..utils.filename import sanitize_filename
 
 
 class PlaylistManager:
@@ -25,9 +26,10 @@ class PlaylistManager:
             if not playlist_info:
                 return
 
-            # 生成歌单文件名
+            # 生成歌单文件名并处理非法字符
             playlist_name = playlist_info.get('name', 'playlist')
-            txt_file = self.playlist_dir / f"{playlist_name}.txt"
+            safe_name = sanitize_filename(playlist_name)
+            txt_file = self.playlist_dir / f"{safe_name}.txt"
 
             # 保存为文本格式
             with open(txt_file, 'w', encoding='utf-8') as f:
@@ -69,14 +71,20 @@ class PlaylistManager:
             if response_data["code"] != 1:
                 raise Exception(f"获取歌单失败: {response_data['msg']}")
 
-            playlist_name = response_data['data']['name']
-            songs = response_data["data"]["songs"]
-            songs_count = response_data['data']['songs_count']
+            # 保存完整的歌单信息
+            self.current_playlist = {
+                'name': response_data['data']['name'],
+                'songs': response_data["data"]["songs"],
+                'songs_count': response_data['data']['songs_count']
+            }
 
-            self.log(f"成功获取歌单，歌单名: {playlist_name}")
-            self.log(f"歌单包含 {songs_count} 首歌曲")
+            self.log(f"成功获取歌单，歌单名: {self.current_playlist['name']}")
+            self.log(f"歌单包含 {self.current_playlist['songs_count']} 首歌曲")
 
-            return songs
+            # 保存歌单到文件
+            await self.save_playlist(self.current_playlist)
+
+            return self.current_playlist['songs']
 
         except Exception as e:
             self.log(f"获取歌单失败: {str(e)}")
