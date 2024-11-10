@@ -1,20 +1,22 @@
 import os
+import json
 import threading
 from pathlib import Path
-from typing import Optional, Callable, Set, List
+from datetime import datetime
+from typing import Optional, Callable, Set, List, Dict
 
 from .config import config
 from .downloader import MusicDownloader
 from ..utils.decorators import ensure_downloads_dir
+from ..handlers.playlist import PlaylistManager
 
 class BatchDownloader(MusicDownloader):
     """批量下载器"""
     def __init__(self, callback: Optional[Callable] = None, stop_event: Optional[threading.Event] = None):
         super().__init__(callback)
         self.existing_songs: Set[str] = set()
-        self.playlist_dir = config.DOWNLOADS_DIR / 'playlist'
-        self.playlist_dir.mkdir(exist_ok=True)
         self.stop_event = stop_event
+        self.playlist_manager = PlaylistManager(callback)
 
     @ensure_downloads_dir
     async def download_from_file(self, file_path: str, quality: int = 11,
@@ -31,7 +33,7 @@ class BatchDownloader(MusicDownloader):
                 self.log(f"读取文件: {file_path}")
                 if not os.path.exists(file_path):
                     raise FileNotFoundError("找不到指定的文件")
-                songs = self._read_song_list(file_path)
+                songs = self.playlist_manager.read_playlist_file(file_path)
 
             if not songs:
                 self.log("没有找到要下载的歌曲")
@@ -49,6 +51,7 @@ class BatchDownloader(MusicDownloader):
         self.existing_songs = self._get_existing_songs()
         total = len(songs)
         success = 0
+        success_list = []
         failed = []
         skipped = []
 
@@ -74,23 +77,41 @@ class BatchDownloader(MusicDownloader):
                                       embed_lyrics=embed_lyrics,
                                       only_lyrics=only_lyrics):
                 success += 1
+                success_list.append(song)
                 self.existing_songs.add(song_name)
             else:
                 failed.append(song)
 
+        # 保存下载报告
+        download_results = {
+            'total': total,
+            'success': success_list,
+            'failed': failed,
+            'skipped': skipped,
+            'quality': quality,
+            'download_lyrics': download_lyrics,
+            'embed_lyrics': embed_lyrics,
+            'only_lyrics': only_lyrics
+        }
+        self.playlist_manager.save_download_report(download_results)
         self._report_results(success, failed, skipped)
 
-    @staticmethod
-    def _read_song_list(filename: str) -> List[str]:
-        """读取歌曲列表文件"""
-        encodings = ["utf-8", "gbk", "gb2312", "ansi"]
-        for encoding in encodings:
-            try:
-                with open(filename, "r", encoding=encoding) as f:
-                    return [line.strip() for line in f if line.strip()]
-            except UnicodeDecodeError:
-                continue
-        raise UnicodeDecodeError("无法使用任何支持的编码读取文件")
+    def _report_results(self, success: int, failed: List[str], skipped: List[str]):
+        """报告下载结果"""
+        if failed:
+            self.log("\n下载失败的歌曲:")
+            for song in failed:
+                self.log(f"- {song}")
+
+        if skipped:
+            self.log("\n已跳过的歌曲:")
+            for song in skipped:
+                self.log(f"- {song}")
+
+        self.log("\n下载统计:")
+        self.log(f"成功: {success}")
+        self.log(f"失败: {len(failed)}")
+        self.log(f"跳过: {len(skipped)}")
 
     @staticmethod
     def _get_existing_songs() -> Set[str]:
@@ -100,20 +121,4 @@ class BatchDownloader(MusicDownloader):
             for filename in os.listdir(config.DOWNLOADS_DIR)
             if filename.endswith(('.mp3', '.flac'))
         } or set()
-
-    def _report_results(self, success: int, failed: List[str], skipped: List[str]):
-        """报告下载结果"""
-        if failed:
-            self.log("以下歌曲下载失败:")
-            for song in failed:
-                self.log(f"- {song}")
-
-        if skipped:
-            self.log("以下歌曲已存在(已跳过):")
-            for song in skipped:
-                self.log(f"- {song}")
-
-        self.log(f"下载完成！")
-        self.log(f"成功: {success}")
-        self.log(f"失败: {len(failed)}")
-        self.log(f"跳过: {len(skipped)}") 
+ 
