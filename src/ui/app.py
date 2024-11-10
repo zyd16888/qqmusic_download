@@ -35,6 +35,8 @@ class MusicDownloaderApp:
 
     def __init__(self, page: ft.Page):
         self.page = page
+        self.page.window.prevent_close = True
+        self.page.window.on_event = self.on_window_event
         self._init_variables()
         self._setup_logger()
         self._init_ui()
@@ -398,7 +400,7 @@ class MusicDownloaderApp:
                     ft.Container(
                         content=ft.Column(
                             [
-                                ft.Text("控制选项", size=14),
+                                ft.Text("控制选��", size=14),
                                 self.batch_lyrics_radio
                             ]
                         )
@@ -619,7 +621,7 @@ class MusicDownloaderApp:
             self.stop_btn.style.bgcolor = ft.colors.RED_200
             self.page.update()
 
-    def on_window_event(self, e):
+    def on_window_event(self, e: ft.WindowEvent):
         if e.data == "close":
             if self.loop and not self.loop.is_closed():
                 self.loop.close()
