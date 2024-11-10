@@ -100,7 +100,7 @@ class EventHandler:
         """处理停止下载事件"""
         if self.app.download_thread and self.app.download_thread.is_alive():
             self.app.stop_event.set()
-            self.app.log_message("正在停止下载...")
+            self.app.log_message("正在停止下载... 等待当前歌曲处理完成后停止")
             self.app.ui.stop_btn.disabled = True
             self.app.ui.stop_btn.style.bgcolor = ft.colors.RED_200
             self.app.page.update()

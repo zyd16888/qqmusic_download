@@ -9,6 +9,6 @@ class UIConstants:
         ("仅下载音频", "no_lyrics"),
         ("仅下载歌词", "only_lyrics"),
         ("下载音频和歌词", "save_lyrics"),
-        ("下载音频并嵌入歌词", "embed_only"),
-        ("下载音频嵌入歌词并保存", "save_and_embed")
+        ("下载音频嵌入歌词-不保存歌词", "embed_only"),
+        ("下载音频嵌入歌词-保存歌词", "save_and_embed")
     ]

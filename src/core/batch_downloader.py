@@ -101,8 +101,8 @@ class BatchDownloader(MusicDownloader):
             'embed_lyrics': embed_lyrics,
             'only_lyrics': only_lyrics
         }
-        self.report_manager.save_report(download_results, playlist_name)
         self._report_results(success, failed, skipped)
+        self.report_manager.save_report(download_results, playlist_name)
 
     def _report_results(self, success: int, failed: List[str], skipped: List[str]):
         """报告下载结果"""

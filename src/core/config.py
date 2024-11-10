@@ -12,8 +12,10 @@ def get_default_quality_options() -> List[QualityOption]:
     return [
         QualityOption("标准音质-192kbps(4)", 4),
         QualityOption("HQ高音质-320kbps(8)", 8),
-        QualityOption("无损音质-FLAC(11)", 11),
-        QualityOption("臻品母带-FLAC(14)", 14),
+        QualityOption("SQ无损音质-(11)", 11),
+        QualityOption("臻品2.0-(12)", 12),
+        QualityOption("臻品全景声-(13)", 13),
+        QualityOption("臻品母带2.0-(14)", 14),
         QualityOption("自定义音质", None)  # 特殊选项
     ]
 
