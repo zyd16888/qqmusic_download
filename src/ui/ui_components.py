@@ -79,7 +79,7 @@ class UIComponents:
         self.quality_dropdown = ft.Dropdown(
             label="音质选择",
             options=[ft.dropdown.Option(text=opt) for opt in self.constants.QUALITY_OPTIONS],
-            value="无损音质",
+            value=self.constants.QUALITY_OPTIONS[2],
             border_radius=8,
             width=200,
             on_change=self.app.event_handler.on_quality_changed
@@ -154,7 +154,7 @@ class UIComponents:
         self.batch_quality_dropdown = ft.Dropdown(
             label="音质选择",
             options=[ft.dropdown.Option(text=opt) for opt in self.constants.QUALITY_OPTIONS],
-            value="无损音质",
+            value=self.constants.QUALITY_OPTIONS[2],
             border_radius=8,
             width=200,
             on_change=self.app.event_handler.on_batch_quality_changed

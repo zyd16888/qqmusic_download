@@ -1,15 +1,21 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict
+from typing import Dict, NamedTuple, List, Union
 
 
-def get_default_quality_map() -> Dict[str, int]:
-    return {
-        "标准音质": 4,
-        "HQ高音质": 8,
-        "无损音质": 11,
-        "臻品母带": 14
-    }
+class QualityOption(NamedTuple):
+    name: str
+    value: Union[int, None]  # None 表示自定义值
+
+
+def get_default_quality_options() -> List[QualityOption]:
+    return [
+        QualityOption("标准音质-192kbps(4)", 4),
+        QualityOption("HQ高音质-320kbps(8)", 8),
+        QualityOption("无损音质-FLAC(11)", 11),
+        QualityOption("臻品母带-FLAC(14)", 14),
+        QualityOption("自定义音质", None)  # 特殊选项
+    ]
 
 
 @dataclass
@@ -21,7 +27,11 @@ class Config:
     PROGRESS_UPDATE_INTERVAL: float = 0.5
 
     # 使用 default_factory 来处理可变默认值
-    QUALITY_MAP: Dict[str, int] = field(default_factory=get_default_quality_map)
+    QUALITY_OPTIONS: List[QualityOption] = field(default_factory=get_default_quality_options)
+
+    @property
+    def QUALITY_MAP(self) -> Dict[str, int]:
+        return {opt.name: opt.value for opt in self.QUALITY_OPTIONS if opt.value is not None}
 
     def __post_init__(self):
         """确保下载目录存在"""

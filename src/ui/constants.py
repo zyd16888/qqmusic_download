@@ -2,14 +2,7 @@ from src.core.config import config
 
 
 class UIConstants:
-    QUALITY_OPTIONS = [
-        "标准音质",
-        "HQ高音质",
-        "无损音质",
-        "臻品母带",
-        "其他"
-    ]
-
+    QUALITY_OPTIONS = [opt.name for opt in config.QUALITY_OPTIONS]
     QUALITY_MAP = config.QUALITY_MAP
 
     LYRICS_OPTIONS = [

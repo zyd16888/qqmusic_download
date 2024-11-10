@@ -3,10 +3,13 @@ from typing import Optional
 
 import flet as ft
 
+from src.ui.constants import UIConstants
+
 
 class EventHandler:
     def __init__(self, app):
         self.app = app
+        self.constants = UIConstants()
 
     def on_minimize_window(self, _):
         """处理最小化窗口事件"""
@@ -19,12 +22,12 @@ class EventHandler:
 
     def on_quality_changed(self, e):
         """处理音质选择变更事件"""
-        self.app.ui.custom_quality.visible = self.app.ui.quality_dropdown.value == "其他"
+        self.app.ui.custom_quality.visible = self.app.ui.quality_dropdown.value == self.constants.QUALITY_OPTIONS[-1]
         self.app.page.update()
 
     def on_batch_quality_changed(self, e):
         """处理批量下载音质选择变更事件"""
-        self.app.ui.batch_custom_quality.visible = self.app.ui.batch_quality_dropdown.value == "其他"
+        self.app.ui.batch_custom_quality.visible = self.app.ui.batch_quality_dropdown.value == self.constants.QUALITY_OPTIONS[-1]
         self.app.page.update()
 
     def on_file_picked(self, e: ft.FilePickerResultEvent):
