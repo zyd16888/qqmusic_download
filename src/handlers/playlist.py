@@ -1,9 +1,9 @@
 from datetime import datetime
 from typing import Optional, Callable, Dict, List
 
-from ..core.network import network
 from ..core.config import config
 from ..core.metadata import SongInfo
+from ..core.network import network
 
 
 class PlaylistManager:
@@ -105,7 +105,7 @@ class MusicInfoFetcher:
         try:
             self.log(f"正在获取 {keyword} 的歌曲信息, 序号: {n}, 音质: {quality}")
             data = await network.async_get(base_url, params=params)
-            
+
             if not data or data['code'] != 200:
                 self.callback(f"获取歌曲信息失败: {data.get('msg', '未知错误') if data else '请求失败'}")
                 return None
@@ -136,7 +136,7 @@ class MusicInfoFetcher:
             data = {"url": url}
 
             response_data = await network.async_post(api_url, data=data, headers=headers)
-            
+
             if not response_data:
                 raise Exception("API请求失败")
 
@@ -146,10 +146,10 @@ class MusicInfoFetcher:
             playlist_name = response_data['data']['name']
             songs = response_data["data"]["songs"]
             songs_count = response_data['data']['songs_count']
-            
+
             self.log(f"成功获取歌单，歌单名: {playlist_name}")
             self.log(f"歌单包含 {songs_count} 首歌曲")
-            
+
             return songs
 
         except Exception as e:

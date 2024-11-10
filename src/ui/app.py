@@ -8,9 +8,9 @@ from typing import Optional
 
 import flet as ft
 
-from src.core.downloader import MusicDownloader
 from src.core.batch_downloader import BatchDownloader
 from src.core.config import config
+from src.core.downloader import MusicDownloader
 
 
 class MusicDownloaderApp:

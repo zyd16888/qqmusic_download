@@ -2,9 +2,10 @@ import html
 import json
 from pathlib import Path
 from typing import Optional, Callable, Tuple, Dict
+
 from .playlist import MusicInfoFetcher
-from ..core.network import network
 from ..core.config import config
+from ..core.network import network
 from ..utils.decorators import ensure_downloads_dir
 
 
@@ -63,7 +64,7 @@ class LyricsManager:
 
             if audio_filename:
                 return await self.save_lyrics_file(lyrics_content, audio_filename)
-            
+
             return True, lyrics_content
 
         except Exception as e:
