@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 import threading
@@ -7,8 +6,6 @@ from typing import Optional
 
 import flet as ft
 
-from src.core.batch_downloader import BatchDownloader
-from src.core.downloader import MusicDownloader
 from src.ui.constants import UIConstants
 from src.ui.event_handler import EventHandler
 from src.ui.ui_components import UIComponents
@@ -68,95 +65,6 @@ class MusicDownloaderApp:
 
         self.logger.info(message)
         self.page.update()
-
-    async def _download_single_thread(self, song_name: str) -> None:
-        """Single download thread"""
-        try:
-            lyrics_option = self.ui.lyrics_radio.value
-            downloader = MusicDownloader(callback=self.log_message)
-
-            self.log_message(f"开始下载: {song_name}")
-            quality = self.event_handler._get_quality_value()
-            if quality is None:
-                return
-
-            download_lyrics = lyrics_option in ("save_lyrics", "save_and_embed")
-            embed_lyrics = lyrics_option in ("embed_only", "save_and_embed")
-
-            success = await downloader.download_song(
-                song_name,
-                n=int(self.ui.index_input.value),
-                quality=quality,
-                download_lyrics=download_lyrics,
-                embed_lyrics=embed_lyrics,
-                only_lyrics=lyrics_option == "only_lyrics",
-            )
-
-            if success:
-                self.log_message(f"下载完成: {song_name}")
-            else:
-                self.log_message(f"下载失败: {song_name}")
-        except Exception as e:
-            self.log_message(f"下载出错: {str(e)}")
-        finally:
-            self.ui.download_btn.disabled = False
-            self.ui.download_btn.style.bgcolor = ft.colors.BLUE
-            self.page.update()
-
-    def _run_async_download_single(self, song_name: str) -> None:
-        """Run async download task wrapper"""
-        try:
-            if os.name == "nt":
-                asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-            if self.loop is None or self.loop.is_closed():
-                self.loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(self.loop)
-
-            self.loop.run_until_complete(self._download_single_thread(song_name))
-        except Exception as e:
-            self.log_message(f"下载出错: {str(e)}")
-        finally:
-            self.ui.download_btn.disabled = False
-            self.ui.download_btn.style.bgcolor = ft.colors.BLUE
-            self.page.update()
-
-    def _run_async_download_batch(
-            self, file_path: str, quality: Optional[int], lyrics_option: str,
-            auto_retry: bool = True
-    ) -> None:
-        try:
-            if os.name == "nt":
-                asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-            if self.loop is None or self.loop.is_closed():
-                self.loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(self.loop)
-
-            downloader = BatchDownloader(
-                callback=self.log_message,
-                stop_event=self.stop_event,
-                auto_retry=auto_retry
-            )
-
-            download_lyrics = lyrics_option in ("save_lyrics", "save_and_embed")
-            embed_lyrics = lyrics_option in ("embed_only", "save_and_embed")
-
-            self.loop.run_until_complete(
-                downloader.download_from_file(
-                    file_path,
-                    quality=quality,
-                    download_lyrics=download_lyrics,
-                    embed_lyrics=embed_lyrics,
-                    only_lyrics=lyrics_option == "only_lyrics",
-                )
-            )
-
-        except Exception as e:
-            self.log_message(f"批量下载出错: {str(e)}")
-        finally:
-            self.event_handler._set_batch_buttons_state(False)
-            self.page.update()
 
     def on_window_event(self, e: ft.WindowEvent):
         if e.data == "close":
