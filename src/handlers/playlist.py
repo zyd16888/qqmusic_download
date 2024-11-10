@@ -1,15 +1,14 @@
-import json
-import aiohttp
 from datetime import datetime
-from pathlib import Path
 from typing import Optional, Callable, Dict, List
-from urllib.parse import urlparse
 
+from ..core.network import network
 from ..core.config import config
 from ..core.metadata import SongInfo
 
+
 class PlaylistManager:
     """歌单管理类"""
+
     def __init__(self, callback: Optional[Callable] = None):
         self.callback = callback or print
         self.playlist_dir = config.DOWNLOADS_DIR / 'playlist'
@@ -31,7 +30,7 @@ class PlaylistManager:
             # 生成歌单文件名
             playlist_name = playlist_info.get('name', 'playlist')
             txt_file = self.playlist_dir / f"{playlist_name}.txt"
-            
+
             # 保存为文本格式
             with open(txt_file, 'w', encoding='utf-8') as f:
                 for song in playlist_info['songs']:
@@ -47,11 +46,11 @@ class PlaylistManager:
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             report_file = self.download_report_dir / f"download_report_{timestamp}.txt"  # 修改报告文件路径
-            
+
             success = len(download_results['success'])
             failed = download_results['failed']
             skipped = download_results['skipped']
-            
+
             with open(report_file, 'w', encoding='utf-8') as f:
                 f.write(f"下载时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write(f"总数: {download_results['total']}\n")
@@ -89,6 +88,7 @@ class PlaylistManager:
 
 class MusicInfoFetcher:
     """音乐信息获取类"""
+
     def __init__(self, callback: Optional[Callable] = None):
         self.callback = callback or print
         self.playlist_manager = PlaylistManager(callback)
@@ -104,24 +104,22 @@ class MusicInfoFetcher:
 
         try:
             self.log(f"正在获取 {keyword} 的歌曲信息, 序号: {n}, 音质: {quality}")
-            async with aiohttp.ClientSession() as session:
-                async with session.get(base_url, params=params) as response:
-                    data = await response.json()
+            data = await network.async_get(base_url, params=params)
+            
+            if not data or data['code'] != 200:
+                self.callback(f"获取歌曲信息失败: {data.get('msg', '未知错误') if data else '请求失败'}")
+                return None
 
-                    if data['code'] != 200:
-                        self.callback(f"获取歌曲信息失败: {data.get('msg', '未知错误')}")
-                        return None
+            song_data = data['data']
+            songmid = song_data['link'].split('songmid=')[1].split('&')[0]
 
-                    song_data = data['data']
-                    songmid = song_data['link'].split('songmid=')[1].split('&')[0]
-
-                    return SongInfo(
-                        song=song_data['song'],
-                        singer=song_data['singer'],
-                        url=song_data['url'],
-                        cover=song_data.get('cover'),
-                        songmid=songmid
-                    )
+            return SongInfo(
+                song=song_data['song'],
+                singer=song_data['singer'],
+                url=song_data['url'],
+                cover=song_data.get('cover'),
+                songmid=songmid
+            )
 
         except Exception as e:
             self.callback(f"获取歌曲信息时出错: {str(e)}")
@@ -137,33 +135,22 @@ class MusicInfoFetcher:
             }
             data = {"url": url}
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(api_url, data=data, headers=headers) as response:
-                    if response.status != 200:
-                        raise Exception(f"API请求失败: {response.status}")
+            response_data = await network.async_post(api_url, data=data, headers=headers)
+            
+            if not response_data:
+                raise Exception("API请求失败")
 
-                    response_data = await response.json()
-                    if response_data["code"] != 1:
-                        raise Exception(f"获取歌单失败: {response_data['msg']}")
+            if response_data["code"] != 1:
+                raise Exception(f"获取歌单失败: {response_data['msg']}")
 
-                    playlist_name = response_data['data']['name']
-                    songs = response_data["data"]["songs"]
-                    songs_count = response_data['data']['songs_count']
-                    
-                    self.log(f"成功获取歌单，歌单名: {playlist_name}")
-                    self.log(f"歌单包含 {songs_count} 首歌曲")
-
-                    # 保存歌单信息
-                    playlist_info = {
-                        'name': playlist_name,
-                        'url': url,
-                        'time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        'songs_count': songs_count,
-                        'songs': songs
-                    }
-                    await self.playlist_manager.save_playlist(playlist_info)
-                    
-                    return songs
+            playlist_name = response_data['data']['name']
+            songs = response_data["data"]["songs"]
+            songs_count = response_data['data']['songs_count']
+            
+            self.log(f"成功获取歌单，歌单名: {playlist_name}")
+            self.log(f"歌单包含 {songs_count} 首歌曲")
+            
+            return songs
 
         except Exception as e:
             self.log(f"获取歌单失败: {str(e)}")

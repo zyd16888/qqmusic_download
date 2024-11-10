@@ -1,11 +1,13 @@
 from dataclasses import dataclass
 from typing import Optional
 
+
 @dataclass
 class AudioMetadata:
     """音频元数据类"""
     title: Optional[str]
     artist: Optional[str]
+
 
 @dataclass
 class SongInfo:
@@ -14,4 +16,4 @@ class SongInfo:
     singer: str
     url: str
     cover: Optional[str]
-    songmid: str 
+    songmid: str

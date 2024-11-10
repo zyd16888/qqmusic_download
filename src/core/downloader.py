@@ -11,6 +11,7 @@ from ..handlers.audio import AudioHandler
 from ..handlers.lyrics import LyricsManager
 from ..handlers.playlist import MusicInfoFetcher
 from ..utils.decorators import ensure_downloads_dir
+from ..core.network import network
 
 class DownloadManager:
     """下载管理器"""
@@ -109,11 +110,12 @@ class MusicDownloader:
         try:
             if song_info.cover:
                 self.log("正在添加封面...")
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(song_info.cover) as response:
-                        cover_data = await response.read()
-                        AudioHandler(temp_filepath).add_cover(cover_data)
+                cover_data = await network.async_get_bytes(song_info.cover)
+                if cover_data:
+                    AudioHandler(temp_filepath).add_cover(cover_data)
 
+            # 如果需要歌词，只下载一次
+            lyrics_content = None
             if download_lyrics or embed_lyrics:
                 self.log("正在获取歌词...")
                 lyrics_success, lyrics_content = await self.lyrics_manager.download_lyrics_from_qq(
@@ -128,10 +130,13 @@ class MusicDownloader:
 
                     if download_lyrics:
                         final_filename = self._get_final_filename(song_info)
-                        await self.lyrics_manager.download_lyrics_from_qq(
-                            song_info.songmid,
-                            audio_filename=final_filename
+                        # 直接使用已获取的歌词内容保存文件
+                        success, message = await self.lyrics_manager.save_lyrics_file(
+                            lyrics_content,
+                            final_filename
                         )
+                        if not success:
+                            self.log(f"保存歌词文件失败: {message}")
 
             final_filename = self._get_final_filename(song_info)
             final_filepath = config.DOWNLOADS_DIR / final_filename

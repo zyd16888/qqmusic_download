@@ -1,17 +1,16 @@
 import os
-import json
 import threading
-from pathlib import Path
-from datetime import datetime
-from typing import Optional, Callable, Set, List, Dict
+from typing import Optional, Callable, Set, List
 
 from .config import config
 from .downloader import MusicDownloader
-from ..utils.decorators import ensure_downloads_dir
 from ..handlers.playlist import PlaylistManager
+from ..utils.decorators import ensure_downloads_dir
+
 
 class BatchDownloader(MusicDownloader):
     """批量下载器"""
+
     def __init__(self, callback: Optional[Callable] = None, stop_event: Optional[threading.Event] = None):
         super().__init__(callback)
         self.existing_songs: Set[str] = set()
@@ -20,8 +19,8 @@ class BatchDownloader(MusicDownloader):
 
     @ensure_downloads_dir
     async def download_from_file(self, file_path: str, quality: int = 11,
-                               download_lyrics: bool = False, embed_lyrics: bool = False,
-                               only_lyrics: bool = False) -> None:
+                                 download_lyrics: bool = False, embed_lyrics: bool = False,
+                                 only_lyrics: bool = False) -> None:
         """从文件或URL批量下载歌曲"""
         try:
             self.log("开始批量下载...")
@@ -45,8 +44,8 @@ class BatchDownloader(MusicDownloader):
             self.log(f"批量下载出错: {str(e)}")
 
     async def _process_songs(self, songs: List[str], quality: int,
-                           download_lyrics: bool, embed_lyrics: bool,
-                           only_lyrics: bool) -> None:
+                             download_lyrics: bool, embed_lyrics: bool,
+                             only_lyrics: bool) -> None:
         """处理歌曲列表"""
         self.existing_songs = self._get_existing_songs()
         total = len(songs)
@@ -73,9 +72,9 @@ class BatchDownloader(MusicDownloader):
 
             self.log(f"[{i}/{total}] 处理: {song}")
             if await self.download_song(song, quality=quality,
-                                      download_lyrics=download_lyrics,
-                                      embed_lyrics=embed_lyrics,
-                                      only_lyrics=only_lyrics):
+                                        download_lyrics=download_lyrics,
+                                        embed_lyrics=embed_lyrics,
+                                        only_lyrics=only_lyrics):
                 success += 1
                 success_list.append(song)
                 self.existing_songs.add(song_name)
@@ -121,4 +120,3 @@ class BatchDownloader(MusicDownloader):
             for filename in os.listdir(config.DOWNLOADS_DIR)
             if filename.endswith(('.mp3', '.flac'))
         } or set()
- 

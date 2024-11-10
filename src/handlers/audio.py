@@ -1,5 +1,6 @@
 from pathlib import Path
-from typing import Union, Optional
+from typing import Union
+
 from mutagen.flac import FLAC, Picture
 from mutagen.id3 import ID3, APIC, USLT
 from mutagen.mp3 import MP3
@@ -7,8 +8,10 @@ from mutagen.mp4 import MP4, MP4Cover
 
 from ..core.metadata import AudioMetadata
 
+
 class AudioHandler:
     """音频处理类"""
+
     def __init__(self, filepath: Union[str, Path]):
         self.filepath = Path(filepath)
         self.audio = self._load_audio()
@@ -92,4 +95,4 @@ class AudioHandler:
                 )
         except Exception as e:
             print(f"读取元数据时出错: {str(e)}")
-            return AudioMetadata(None, None) 
+            return AudioMetadata(None, None)

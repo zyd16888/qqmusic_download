@@ -1,15 +1,16 @@
-import json
 import html
-import aiohttp
-from typing import Optional, Callable, Tuple, Dict
+import json
 from pathlib import Path
-
+from typing import Optional, Callable, Tuple, Dict
+from .playlist import MusicInfoFetcher
+from ..core.network import network
 from ..core.config import config
 from ..utils.decorators import ensure_downloads_dir
-from .playlist import MusicInfoFetcher
+
 
 class LyricsManager:
     """歌词管理类"""
+
     def __init__(self, callback: Optional[Callable] = None):
         self.callback = callback or print
 
@@ -18,7 +19,7 @@ class LyricsManager:
         self.callback(message)
 
     async def download_lyrics_from_qq(self, song_mid: str, audio_filename: Optional[str] = None,
-                                    return_content: bool = False) -> Tuple[bool, str]:
+                                      return_content: bool = False) -> Tuple[bool, str]:
         """从QQ音乐下载歌词"""
         self.log(f"正在从QQ音乐获取歌词，歌曲mid: {song_mid}")
         try:
@@ -42,24 +43,28 @@ class LyricsManager:
             }
             headers = {"Referer": "https://y.qq.com/"}
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(lyric_url, params=params, headers=headers) as response:
-                    lyric_data = await response.text()
-                    lyric_data = lyric_data.strip('MusicJsonCallback()').strip()
-                    lyric_json = json.loads(lyric_data)
+            lyric_data = await network.async_get_text(lyric_url, params=params, headers=headers)
+            if not lyric_data:
+                return False, "获取歌词失败"
 
-                    if lyric_json.get('retcode') != 0:
-                        return False, "获取歌词失败"
+            lyric_data = lyric_data.strip('MusicJsonCallback()').strip()
+            lyric_json = json.loads(lyric_data)
 
-                    lyrics_content = self._process_qq_lyrics(
-                        html.unescape(lyric_json.get("lyric", "")),
-                        html.unescape(lyric_json.get("trans", ""))
-                    )
+            if lyric_json.get('retcode') != 0:
+                return False, "获取歌词失败"
 
-                    if return_content:
-                        return True, lyrics_content
+            lyrics_content = self._process_qq_lyrics(
+                html.unescape(lyric_json.get("lyric", "")),
+                html.unescape(lyric_json.get("trans", ""))
+            )
 
-                    return self._save_lyrics(lyrics_content, audio_filename)
+            if return_content:
+                return True, lyrics_content
+
+            if audio_filename:
+                return await self.save_lyrics_file(lyrics_content, audio_filename)
+            
+            return True, lyrics_content
 
         except Exception as e:
             error_msg = f"下载歌词时出错: {str(e)}"
@@ -95,7 +100,7 @@ class LyricsManager:
         return lines
 
     @ensure_downloads_dir
-    def _save_lyrics(self, lyrics_content: str, audio_filename: Optional[str]) -> Tuple[bool, str]:
+    async def save_lyrics_file(self, lyrics_content: str, audio_filename: Optional[str]) -> Tuple[bool, str]:
         """保存歌词到文件"""
         if not audio_filename:
             return False, "保存歌词文件时需要提供音频文件名"
@@ -111,4 +116,4 @@ class LyricsManager:
         except Exception as e:
             error_msg = f"保存歌词文件时出错: {str(e)}"
             self.log(error_msg)
-            return False, error_msg 
+            return False, error_msg

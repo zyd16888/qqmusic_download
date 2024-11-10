@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict
 
+
 def get_default_quality_map() -> Dict[str, int]:
     return {
         "标准音质": 4,
@@ -9,6 +10,7 @@ def get_default_quality_map() -> Dict[str, int]:
         "无损音质": 11,
         "母带": 14
     }
+
 
 @dataclass
 class Config:
@@ -24,6 +26,7 @@ class Config:
     def __post_init__(self):
         """确保下载目录存在"""
         self.DOWNLOADS_DIR.mkdir(exist_ok=True)
+
 
 # 全局配置实例
 config = Config()
