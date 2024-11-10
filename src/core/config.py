@@ -8,7 +8,7 @@ def get_default_quality_map() -> Dict[str, int]:
         "标准音质": 4,
         "HQ高音质": 8,
         "无损音质": 11,
-        "母带": 14
+        "臻品母带": 14
     }
 
 

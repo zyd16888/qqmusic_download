@@ -49,7 +49,7 @@ class DownloadManager:
                             self._update_progress(downloaded, total_size, start_time, current_time)
                             last_update_time = current_time
 
-                self.log("下载完成！")
+                self.log("音频文件下载完成！")
                 return True
 
         except Exception as e:

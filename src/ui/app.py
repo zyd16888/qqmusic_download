@@ -19,7 +19,7 @@ class MusicDownloaderApp:
         "标准音质",
         "HQ高音质",
         "无损音质",
-        "母带",
+        "臻品母带",
         "其他"
     ]
 
@@ -349,6 +349,12 @@ class MusicDownloaderApp:
 
         self.batch_quality_dropdown.on_change = on_batch_quality_changed
 
+        # 在音质选择后添加重试选项
+        self.retry_checkbox = ft.Checkbox(
+            label="下载失败时自动降低音质重试",
+            value=True,
+        )
+
         # Lyrics options
         self.batch_lyrics_radio = ft.RadioGroup(
             content=ft.Column([
@@ -394,13 +400,17 @@ class MusicDownloaderApp:
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN
                     ),
                     ft.Row(
-                        [self.batch_quality_dropdown, self.batch_custom_quality],
+                        [
+                            self.batch_quality_dropdown, 
+                            self.batch_custom_quality,
+                            self.retry_checkbox  # 添加到音质选择同一行
+                        ],
                         alignment=ft.MainAxisAlignment.START
                     ),
                     ft.Container(
                         content=ft.Column(
                             [
-                                ft.Text("控制选��", size=14),
+                                ft.Text("控制选项", size=14),
                                 self.batch_lyrics_radio
                             ]
                         )
@@ -542,7 +552,7 @@ class MusicDownloaderApp:
 
             self.download_thread = threading.Thread(
                 target=self._run_async_download_batch,
-                args=(file_path, quality, lyrics_option),
+                args=(file_path, quality, lyrics_option, self.retry_checkbox.value),
                 daemon=True
             )
             self.download_thread.start()
@@ -551,7 +561,8 @@ class MusicDownloaderApp:
             self._set_batch_buttons_state(False)
 
     def _run_async_download_batch(
-            self, file_path: str, quality: Optional[int], lyrics_option: str
+            self, file_path: str, quality: Optional[int], lyrics_option: str, 
+            auto_retry: bool = True
     ) -> None:
         try:
             if os.name == "nt":
@@ -561,7 +572,11 @@ class MusicDownloaderApp:
                 self.loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(self.loop)
 
-            downloader = BatchDownloader(callback=self.log_message, stop_event=self.stop_event)
+            downloader = BatchDownloader(
+                callback=self.log_message, 
+                stop_event=self.stop_event,
+                auto_retry=auto_retry
+            )
 
             download_lyrics = lyrics_option in ("save_lyrics", "save_and_embed")
             embed_lyrics = lyrics_option in ("embed_only", "save_and_embed")
