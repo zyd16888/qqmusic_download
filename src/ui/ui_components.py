@@ -147,7 +147,7 @@ class UIComponents:
             padding=10,
             border=ft.border.all(0.5, ft.colors.GREY_300),
             border_radius=8,
-            margin=ft.margin.only(left=20),
+            margin=ft.margin.only(top=20, left=20, right=30),
             alignment=ft.alignment.top_left
         )
 
@@ -262,7 +262,8 @@ class UIComponents:
             padding=10,
             border=ft.border.all(0.5, ft.colors.GREY_300),
             border_radius=8,
-            margin=ft.margin.only(left=20)
+            margin=ft.margin.only(top=20, left=20,right=30),
+            alignment=ft.alignment.top_left
         )
 
     def _create_log_components(self):
@@ -365,7 +366,9 @@ class UIComponents:
                                 self.control_options,
                                 ft.Container(expand=True),
                                 self.path_info
-                            ]
+                            ],
+                            alignment=ft.MainAxisAlignment.START,
+                            vertical_alignment=ft.CrossAxisAlignment.START,
                         ),
                         margin=ft.margin.only(bottom=15)
                     ),
@@ -403,7 +406,9 @@ class UIComponents:
                                 self.batch_control_options,
                                 ft.Container(expand=True),
                                 self.batch_path_info,
-                            ]
+                            ],
+                            alignment=ft.MainAxisAlignment.START,
+                            vertical_alignment=ft.CrossAxisAlignment.START,
                         ),
                         margin=ft.margin.only(bottom=15)
                     ),
