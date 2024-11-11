@@ -392,7 +392,7 @@ class UIComponents:
                     ft.Container(
                         content=ft.Row(
                             [
-                                self.control_options,
+                                self.batch_lyrics_radio,
                                 ft.Container(expand=True),
                                 self.batch_path_info,
                             ]
