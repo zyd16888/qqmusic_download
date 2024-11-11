@@ -208,6 +208,14 @@ class UIComponents:
             ], spacing=0),
             value="no_lyrics"
         )
+        self.batch_control_options = ft.Column(
+            [
+                ft.Text("控制选项", size=14),
+                self.batch_lyrics_radio,
+            ],
+            spacing=5,
+            tight=True
+        )
 
         # 批量下载按钮
         self.batch_download_btn = ft.ElevatedButton(
@@ -392,7 +400,7 @@ class UIComponents:
                     ft.Container(
                         content=ft.Row(
                             [
-                                self.batch_lyrics_radio,
+                                self.batch_control_options,
                                 ft.Container(expand=True),
                                 self.batch_path_info,
                             ]
