@@ -9,6 +9,7 @@ import flet as ft
 from src.ui.constants import UIConstants
 from src.ui.event_handler import EventHandler
 from src.ui.ui_components import UIComponents
+from src.core.config import config
 
 
 class MusicDownloaderApp:
@@ -36,13 +37,10 @@ class MusicDownloaderApp:
 
     def _setup_logger(self) -> None:
         """Set up logging system"""
-        if not os.path.exists('logs'):
-            os.makedirs('logs')
-
         self.logger = logging.getLogger('MusicDownloader')
         self.logger.setLevel(logging.INFO)
 
-        log_file = f'logs/download_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+        log_file = config.LOGS_DIR / f'download_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
         fh = logging.FileHandler(log_file, encoding='utf-8')
         fh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         self.logger.addHandler(fh)

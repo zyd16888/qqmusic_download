@@ -19,7 +19,7 @@ class BatchDownloader(MusicDownloader):
         self.existing_songs: Set[str] = set()
         self.stop_event = stop_event
         self.playlist_manager = PlaylistManager(callback)
-        self.report_manager = DownloadReportManager(config.DOWNLOADS_DIR / 'download_reports', callback)
+        self.report_manager = DownloadReportManager(config.DOWNLOADS_DIR / 'reports', callback)
         self.auto_retry = auto_retry
 
     @ensure_downloads_dir

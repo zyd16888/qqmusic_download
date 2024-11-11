@@ -10,10 +10,8 @@ class PlaylistManager:
 
     def __init__(self, callback: Optional[Callable] = None):
         self.callback = callback or print
-        self.playlist_dir = config.DOWNLOADS_DIR / 'playlist'
-        self.download_report_dir = config.DOWNLOADS_DIR / 'download_reports'  # 新增下载报告目录
-        self.playlist_dir.mkdir(exist_ok=True)
-        self.download_report_dir.mkdir(exist_ok=True)  # 确保下载报告目录存在
+        self.playlist_dir = config.PLAYLISTS_DIR
+        self.download_report_dir = config.REPORTS_DIR
         self.current_playlist: Dict = {}
 
     def log(self, message: str):

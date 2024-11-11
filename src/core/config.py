@@ -24,6 +24,9 @@ def get_default_quality_options() -> List[QualityOption]:
 class Config:
     """全局配置类"""
     DOWNLOADS_DIR: Path = field(default=Path('downloads'))
+    PLAYLISTS_DIR: Path = field(default=Path('downloads/playlists'))
+    REPORTS_DIR: Path = field(default=Path('downloads/reports'))
+    LOGS_DIR: Path = field(default=Path('logs'))
     DEFAULT_QUALITY: int = 11
     BLOCK_SIZE: int = 8192
     PROGRESS_UPDATE_INTERVAL: float = 0.5
@@ -36,8 +39,12 @@ class Config:
         return {opt.name: opt.value for opt in self.QUALITY_OPTIONS if opt.value is not None}
 
     def __post_init__(self):
-        """确保下载目录存在"""
+        """确保所有必要的目录存在"""
+        # 创建所有必要的目录
         self.DOWNLOADS_DIR.mkdir(exist_ok=True)
+        self.PLAYLISTS_DIR.mkdir(exist_ok=True)
+        self.REPORTS_DIR.mkdir(exist_ok=True)
+        self.LOGS_DIR.mkdir(exist_ok=True)
 
 
 # 全局配置实例

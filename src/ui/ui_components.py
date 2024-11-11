@@ -4,6 +4,7 @@ import sys
 import flet as ft
 
 from src.ui.constants import UIConstants
+from src.core.config import Config
 
 
 class UIComponents:
@@ -124,6 +125,31 @@ class UIComponents:
             height=50,
             content=ft.Text("下载", size=16),
         )
+        self.control_options = ft.Column(
+            [
+                ft.Text("控制选项", size=14),
+                self.lyrics_radio,
+            ],
+            spacing=5,
+            tight=True
+        )
+        self.path_info = ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Text("路径信息:", size=16, color=ft.colors.GREY_600),
+                    ft.Text(f"下载目录: {Config.DOWNLOADS_DIR}",
+                            size=14, color=ft.colors.GREY_400),
+                    ft.Text(f"日志目录: {Config.LOGS_DIR}",
+                            size=14, color=ft.colors.GREY_400),
+                ],
+                spacing=5,
+            ),
+            padding=10,
+            border=ft.border.all(0.5, ft.colors.GREY_300),
+            border_radius=8,
+            margin=ft.margin.only(left=20),
+            alignment=ft.alignment.top_left
+        )
 
     def _create_batch_download_components(self):
         """创建批量下载相关组件"""
@@ -209,6 +235,26 @@ class UIComponents:
             width=150,
             height=50,
             content=ft.Text("停止下载", size=16),
+        )
+        self.batch_path_info = ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Text("路径信息:", size=16, color=ft.colors.GREY_600),
+                    ft.Text(f"下载目录: {Config.DOWNLOADS_DIR}",
+                            size=14, color=ft.colors.GREY_400),
+                    ft.Text(f"日志目录: {Config.LOGS_DIR}",
+                            size=14, color=ft.colors.GREY_400),
+                    ft.Text(f"歌单目录: {Config.PLAYLISTS_DIR}",
+                            size=14, color=ft.colors.GREY_400),
+                    ft.Text(f"报告目录: {Config.REPORTS_DIR}",
+                            size=14, color=ft.colors.GREY_400),
+                ],
+                spacing=5,
+            ),
+            padding=10,
+            border=ft.border.all(0.5, ft.colors.GREY_300),
+            border_radius=8,
+            margin=ft.margin.only(left=20)
         )
 
     def _create_log_components(self):
@@ -299,19 +345,19 @@ class UIComponents:
                                 self.custom_quality,
                                 self.index_input
                             ],
-                            alignment=ft.MainAxisAlignment.START,
+                            # alignment=ft.MainAxisAlignment.START,
+                            alignment=ft.alignment.top_left,
                             spacing=10
                         ),
                         margin=ft.margin.only(bottom=10)
                     ),
                     ft.Container(
-                        content=ft.Column(
+                        content=ft.Row(
                             [
-                                ft.Text("控制选项", size=14),
-                                self.lyrics_radio
-                            ],
-                            spacing=5,
-                            tight=True
+                                self.control_options,
+                                ft.Container(expand=True),
+                                self.path_info
+                            ]
                         ),
                         margin=ft.margin.only(bottom=15)
                     ),
@@ -344,12 +390,14 @@ class UIComponents:
                         alignment=ft.MainAxisAlignment.START
                     ),
                     ft.Container(
-                        content=ft.Column(
+                        content=ft.Row(
                             [
-                                ft.Text("控制选项", size=14),
-                                self.batch_lyrics_radio
+                                self.control_options,
+                                ft.Container(expand=True),
+                                self.batch_path_info,
                             ]
-                        )
+                        ),
+                        margin=ft.margin.only(bottom=15)
                     ),
                     ft.Row(
                         [self.batch_download_btn, self.stop_btn],
