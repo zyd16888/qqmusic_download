@@ -3,8 +3,8 @@ import sys
 
 import flet as ft
 
-from src.ui.constants import UIConstants
 from src.core.config import Config
+from src.ui.constants import UIConstants
 
 
 class UIComponents:
@@ -34,7 +34,7 @@ class UIComponents:
             "可爱泡芙桃子酒": os.path.join(fonts_dir, "可爱泡芙桃子酒.ttf")
         }
         self.app.page.theme = ft.Theme(font_family="可爱泡芙桃子酒")
-        self.app.page.window.width = 700
+        self.app.page.window.width = 600
         self.app.page.window.height = 870
 
     def _create_title_bar(self):
@@ -262,7 +262,7 @@ class UIComponents:
             padding=10,
             border=ft.border.all(0.5, ft.colors.GREY_300),
             border_radius=8,
-            margin=ft.margin.only(top=20, left=20,right=30),
+            margin=ft.margin.only(top=20, left=20, right=30),
             alignment=ft.alignment.top_left
         )
 
@@ -364,7 +364,7 @@ class UIComponents:
                         content=ft.Row(
                             [
                                 self.control_options,
-                                ft.Container(expand=True),
+                                ft.Container(width=50),
                                 self.path_info
                             ],
                             alignment=ft.MainAxisAlignment.START,
@@ -404,7 +404,7 @@ class UIComponents:
                         content=ft.Row(
                             [
                                 self.batch_control_options,
-                                ft.Container(expand=True),
+                                ft.Container(width=50),
                                 self.batch_path_info,
                             ],
                             alignment=ft.MainAxisAlignment.START,
