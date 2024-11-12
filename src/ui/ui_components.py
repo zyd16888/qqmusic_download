@@ -398,7 +398,7 @@ class UIComponents:
                                     [
                                         self.quality_dropdown,
                                         self.custom_quality,
-                                        self.index_input
+                                        # self.index_input
                                     ],
                                     alignment=ft.MainAxisAlignment.START,
                                 ),
@@ -483,5 +483,5 @@ class UIComponents:
     def _update_search_results_width(self):
         """更新搜索结果列表宽度"""
         # 窗口宽度 - 搜索按钮宽度(100) - 间距(10) - 左右边距(20) - 滚动条宽度(20)
-        search_results_width = self.app.page.window.width - 100 - 10 - 20 - 20
+        search_results_width = self.app.page.window.width - 100 - 10 - 20 - 15
         self.search_results.width = search_results_width
