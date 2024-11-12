@@ -1,6 +1,6 @@
 import time
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, List
 from urllib.parse import urlparse
 
 import humanize
@@ -10,8 +10,8 @@ from .metadata import SongInfo
 from ..core.network import network
 from ..handlers.audio import AudioHandler
 from ..handlers.lyrics import LyricsManager
-from ..handlers.playlist import PlaylistManager
 from ..handlers.musicInfo import MusicInfoFetcher
+from ..handlers.playlist import PlaylistManager
 from ..utils.decorators import ensure_downloads_dir
 
 
@@ -198,3 +198,57 @@ class MusicDownloader:
             ext = '.mp3'
 
         return ext
+
+    async def search_songs(self, keyword: str) -> List[dict]:
+        """搜索歌曲并返回处理后的结果"""
+        try:
+            results = await self.info_fetcher.search_songs(keyword)
+
+            # 处理搜索结果
+            formatted_results = []
+            for i, song in enumerate(results, 1):
+                formatted_results.append({
+                    'index': i,
+                    'display_text': f"{i}. {song.song} - {song.singer}",
+                    'song_data': song,
+                    'input_value': f"{song.song} - {song.singer}",
+                    'mid': song.mid
+                })
+
+            return formatted_results
+        except Exception as e:
+            self.log(f"搜索失败: {str(e)}")
+            return []
+
+    async def download_song_by_mid(self, mid: str, quality: int = 11,
+                                   download_lyrics: bool = False,
+                                   embed_lyrics: bool = False,
+                                   only_lyrics: bool = False) -> bool:
+        """通过 mid 下载歌曲"""
+        try:
+            song_info = await self.info_fetcher.get_song_info_by_mid(mid, quality)
+            if not song_info:
+                return False
+
+            if not only_lyrics:
+                if not song_info.url:
+                    self.log("api返回的URL为空, 请尝试更换音质或序号，或稍后再试")
+                    return False
+
+                temp_filepath = self._get_temp_filepath(song_info.url)
+                if not await self.download_manager.download_with_progress(song_info.url, temp_filepath):
+                    return False
+
+                success = await self._process_audio_file(temp_filepath, song_info, download_lyrics, embed_lyrics)
+                return success
+            else:
+                final_filename = self._get_final_filename(song_info)
+                success, _ = await self.lyrics_manager.download_lyrics_from_qq(
+                    song_info.songmid,
+                    audio_filename=final_filename
+                )
+                return success
+
+        except Exception as e:
+            self.log(f"下载失败: {str(e)}")
+            return False

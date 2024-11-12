@@ -15,6 +15,7 @@ class EventHandler:
         self.app = app
         self.constants = UIConstants()
         self.loop = None  # 用于异步任务
+        self.selected_song_mid = None  # 添加这一行
 
     def on_minimize_window(self, _):
         """处理最小化窗口事件"""
@@ -150,7 +151,7 @@ class EventHandler:
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
 
-    async def _download_single_thread(self, song_name: str) -> None:
+    async def _download_single_thread(self, song_name: str, mid: Optional[str] = None) -> None:
         """Single download thread"""
         try:
             lyrics_option = self.app.ui.lyrics_radio.value
@@ -164,14 +165,23 @@ class EventHandler:
             download_lyrics = lyrics_option in ("save_lyrics", "save_and_embed")
             embed_lyrics = lyrics_option in ("embed_only", "save_and_embed")
 
-            success = await downloader.download_song(
-                song_name,
-                n=int(self.app.ui.index_input.value),
-                quality=quality,
-                download_lyrics=download_lyrics,
-                embed_lyrics=embed_lyrics,
-                only_lyrics=lyrics_option == "only_lyrics",
-            )
+            if mid:
+                success = await downloader.download_song_by_mid(
+                    mid,
+                    quality=quality,
+                    download_lyrics=download_lyrics,
+                    embed_lyrics=embed_lyrics,
+                    only_lyrics=lyrics_option == "only_lyrics",
+                )
+            else:
+                success = await downloader.download_song(
+                    song_name,
+                    n=int(self.app.ui.index_input.value),
+                    quality=quality,
+                    download_lyrics=download_lyrics,
+                    embed_lyrics=embed_lyrics,
+                    only_lyrics=lyrics_option == "only_lyrics",
+                )
 
             if success:
                 self.app.log_message(f"下载完成: {song_name}")
@@ -188,7 +198,9 @@ class EventHandler:
         """Run async download task wrapper"""
         try:
             self._setup_event_loop()
-            self.loop.run_until_complete(self._download_single_thread(song_name))
+            self.loop.run_until_complete(
+                self._download_single_thread(song_name, self.selected_song_mid)
+            )
         except Exception as e:
             self.app.log_message(f"下载出错: {str(e)}")
         finally:
@@ -226,3 +238,45 @@ class EventHandler:
         finally:
             self._set_batch_buttons_state(False)
             self.app.page.update()
+
+    def on_search(self, e):
+        """搜索按钮点击事件"""
+        keyword = self.app.ui.search_input.value
+        if not keyword:
+            self.app.log_message("请输入搜索关键词")
+            return
+
+        self._setup_event_loop()
+        downloader = MusicDownloader(callback=self.app.log_message)
+        results = self.loop.run_until_complete(downloader.search_songs(keyword))
+
+        # 只有在有搜索结果时才显示结果列表
+        if results:
+            self.app.ui.search_results.content.controls.clear()
+            for result in results:
+                self.app.ui.search_results.content.controls.append(
+                    ft.TextButton(
+                        text=result['display_text'],
+                        on_click=lambda e, r=result: self.on_result_selected(e, r),
+                        style=ft.ButtonStyle(
+                            alignment=ft.alignment.center_left,
+                            padding=ft.padding.only(top=2, bottom=2),
+                        ),
+                        width=self.app.ui.search_results.width - 40,
+                    )
+                )
+            self.app.ui.search_results.visible = True
+        else:
+            self.app.ui.search_results.visible = False
+
+        self.app.page.update()
+
+    def on_result_selected(self, e, result):
+        """搜索结果选择事件"""
+        self.app.ui.search_input.value = result['input_value']
+        self.app.ui.search_results.visible = False
+
+        # 保存选中歌曲的 mid
+        self.selected_song_mid = result.get('mid')
+
+        self.app.page.update()

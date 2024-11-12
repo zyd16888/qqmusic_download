@@ -15,6 +15,9 @@ class UIComponents:
         self._setup_fonts()
         self._create_layout()
 
+        # 添加窗口大小变化监听
+        self.app.page.on_resize = self._on_window_resize
+
     def _init_components(self):
         """初始化所有UI组件"""
         self._create_title_bar()
@@ -73,7 +76,7 @@ class UIComponents:
             label="歌曲名称",
             hint_text="请输入要下载的歌曲名称 可加上歌手名获取更加准确的结果",
             border_radius=8,
-            expand=True
+            expand=True,
         )
 
         # 音质选择
@@ -130,8 +133,8 @@ class UIComponents:
                 ft.Text("控制选项", size=14),
                 self.lyrics_radio,
             ],
-            spacing=5,
-            tight=True
+            spacing=0,
+            # tight=True
         )
         self.path_info = ft.Container(
             content=ft.Column(
@@ -149,6 +152,47 @@ class UIComponents:
             border_radius=8,
             margin=ft.margin.only(top=20, left=20, right=30),
             alignment=ft.alignment.top_left
+        )
+
+        # 搜索按钮
+        self.search_btn = ft.ElevatedButton(
+            text="搜索",
+            on_click=self.app.event_handler.on_search,
+            style=ft.ButtonStyle(
+                color=ft.colors.WHITE,
+                bgcolor=ft.colors.BLUE,
+                padding=0,
+            ),
+            width=100,
+            height=40,
+            content=ft.Text("搜索", size=14),
+        )
+
+        # 搜索结果列表
+        self.search_results = ft.Container(
+            content=ft.ListView(
+                expand=1,
+                spacing=10,
+                height=300,
+                controls=[]
+            ),
+            border=ft.border.all(1, ft.colors.GREY_300),
+            border_radius=8,
+            padding=5,
+            visible=False,
+            bgcolor=ft.colors.with_opacity(0.9, ft.colors.WHITE38),
+        )
+        # 初始化宽度
+        self._update_search_results_width()
+
+        # 修改搜索输入框和按钮的布局
+        self.search_row = ft.Row(
+            [
+                self.search_input,
+                ft.Container(width=10),
+                self.search_btn
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN
         )
 
     def _create_batch_download_components(self):
@@ -341,46 +385,53 @@ class UIComponents:
     def _create_single_download_view(self) -> ft.Container:
         """创建单曲下载视图"""
         return ft.Container(
-            content=ft.Column(
+            content=ft.Stack(
                 [
-                    ft.Container(
-                        content=self.search_input,
-                        margin=ft.margin.only(bottom=10)
+                    ft.Column(
+                        [
+                            ft.Container(
+                                content=self.search_row,
+                                margin=ft.margin.only(top=10)
+                            ),
+                            ft.Container(
+                                content=ft.Row(
+                                    [
+                                        self.quality_dropdown,
+                                        self.custom_quality,
+                                        self.index_input
+                                    ],
+                                    alignment=ft.MainAxisAlignment.START,
+                                ),
+                                margin=ft.margin.only(bottom=10)
+                            ),
+                            ft.Container(
+                                content=ft.Row(
+                                    [
+                                        self.control_options,
+                                        ft.Container(width=50),
+                                        self.path_info
+                                    ],
+                                    alignment=ft.MainAxisAlignment.START,
+                                    vertical_alignment=ft.CrossAxisAlignment.START,
+                                ),
+                                margin=ft.margin.only(bottom=5)
+                            ),
+                            ft.Container(
+                                content=self.download_btn,
+                                alignment=ft.alignment.center
+                            )
+                        ]
                     ),
                     ft.Container(
-                        content=ft.Row(
-                            [
-                                self.quality_dropdown,
-                                self.custom_quality,
-                                self.index_input
-                            ],
-                            # alignment=ft.MainAxisAlignment.START,
-                            alignment=ft.alignment.top_left,
-                            spacing=10
-                        ),
-                        margin=ft.margin.only(bottom=10)
-                    ),
-                    ft.Container(
-                        content=ft.Row(
-                            [
-                                self.control_options,
-                                ft.Container(width=50),
-                                self.path_info
-                            ],
-                            alignment=ft.MainAxisAlignment.START,
-                            vertical_alignment=ft.CrossAxisAlignment.START,
-                        ),
-                        margin=ft.margin.only(bottom=15)
-                    ),
-                    ft.Container(
-                        content=self.download_btn,
-                        alignment=ft.alignment.center
+                        content=self.search_results,
+                        top=70,
+                        left=0,
                     )
                 ],
-                spacing=0
+                expand=True
             ),
-            margin=ft.margin.only(left=10, top=10, right=10),
-            padding=ft.padding.only(left=10, top=0, right=10)
+            margin=ft.margin.only(bottom=0),
+            padding=ft.padding.only(bottom=0)
         )
 
     def _create_batch_download_view(self) -> ft.Container:
@@ -423,3 +474,14 @@ class UIComponents:
             margin=ft.margin.only(left=10, top=10, right=10),
             padding=ft.padding.only(left=10, top=0, right=10)
         )
+
+    def _on_window_resize(self, e):
+        """处理窗口大小变化"""
+        self._update_search_results_width()
+        self.app.page.update()
+
+    def _update_search_results_width(self):
+        """更新搜索结果列表宽度"""
+        # 窗口宽度 - 搜索按钮宽度(100) - 间距(10) - 左右边距(20) - 滚动条宽度(20)
+        search_results_width = self.app.page.window.width - 100 - 10 - 20 - 20
+        self.search_results.width = search_results_width

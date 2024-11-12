@@ -85,3 +85,47 @@ class MusicInfoFetcher:
         except Exception as e:
             self.callback(f"搜索歌曲时出错: {str(e)}")
             return []
+
+    async def get_song_info_by_mid(self, mid: str, quality: int = 11) -> Optional[SongInfo]:
+        """通过歌曲mid获取信息
+        
+        Args:
+            mid: 歌曲的mid
+            quality: 音质等级(1-14)
+            
+        Returns:
+            Optional[SongInfo]: 歌曲信息
+        """
+        base_url = 'https://api.lolimi.cn/API/qqdg/'
+        params = {'mid': mid, 'q': quality}
+
+        try:
+            self.log(f"正在获取歌曲信息, mid: {mid}, 音质: {quality}")
+            raw_data = await network.async_get(base_url, params=params)
+
+            if not raw_data or raw_data['code'] != 200:
+                self.callback(f"获取歌曲信息失败: {raw_data.get('msg', '未知错误') if raw_data else '请求失败'}")
+                return None
+
+            # 转换日期字符串为date对象
+            raw_data['data']['time'] = datetime.strptime(raw_data['data']['time'], '%Y-%m-%d').date()
+
+            # 使用新的数据模型
+            response = SongResponse(
+                code=raw_data['code'],
+                data=SongData(**raw_data['data'])
+            )
+
+            songmid = response.data.link.split('songmid=')[1].split('&')[0]
+
+            return SongInfo(
+                song=response.data.song,
+                singer=response.data.singer,
+                url=response.data.url,
+                cover=response.data.cover,
+                songmid=songmid
+            )
+
+        except Exception as e:
+            self.callback(f"获取歌曲信息时出错: {str(e)}")
+            return None
