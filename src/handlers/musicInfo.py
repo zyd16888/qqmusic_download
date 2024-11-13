@@ -31,8 +31,9 @@ class MusicInfoFetcher:
                 self.callback(f"获取歌曲信息失败: {raw_data.get('msg', '未知错误') if raw_data else '请求失败'}")
                 return None
 
-            # 转换日期字符串为date对象
-            raw_data['data']['time'] = datetime.strptime(raw_data['data']['time'], '%Y-%m-%d').date()
+            # 修改日期转换逻辑
+            if raw_data['data'].get('time'):
+                raw_data['data']['time'] = datetime.strptime(raw_data['data']['time'], '%Y-%m-%d').date()
 
             # 使用新的数据模型
             response = SongResponse(
@@ -47,7 +48,9 @@ class MusicInfoFetcher:
                 singer=response.data.singer,
                 url=response.data.url,
                 cover=response.data.cover,
-                songmid=songmid
+                songmid=songmid,
+                quality=response.data.quality,
+                size=response.data.size
             )
 
         except Exception as e:
@@ -107,8 +110,9 @@ class MusicInfoFetcher:
                 self.callback(f"获取歌曲信息失败: {raw_data.get('msg', '未知错误') if raw_data else '请求失败'}")
                 return None
 
-            # 转换日期字符串为date对象
-            raw_data['data']['time'] = datetime.strptime(raw_data['data']['time'], '%Y-%m-%d').date()
+            # 修改日期转换逻辑
+            if raw_data['data'].get('time'):
+                raw_data['data']['time'] = datetime.strptime(raw_data['data']['time'], '%Y-%m-%d').date()
 
             # 使用新的数据模型
             response = SongResponse(

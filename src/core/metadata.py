@@ -17,3 +17,5 @@ class SongInfo:
     url: str
     cover: Optional[str]
     songmid: str
+    quality: str
+    size: str

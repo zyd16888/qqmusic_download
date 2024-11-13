@@ -89,6 +89,8 @@ class MusicDownloader:
             song_info = await self.info_fetcher.get_song_info(keyword, n, quality)
             if not song_info:
                 return False
+            else:
+                self.log(f"歌曲信息获取成功: {song_info.song} - {song_info.singer} 音质: {song_info.quality} 大小: {song_info.size}")
 
             if not only_lyrics:
                 if not song_info.url:
