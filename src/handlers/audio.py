@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Union
 
 from mutagen.flac import FLAC, Picture
-from mutagen.id3 import ID3, APIC, USLT
+from mutagen.id3 import ID3, APIC, USLT, SYLT
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4, MP4Cover
 
@@ -63,6 +63,8 @@ class AudioHandler:
                 if not hasattr(self.audio, 'tags'):
                     self.audio.add_tags()
                 self.audio.tags["USLT"] = USLT(encoding=3, lang="chi", desc="", text=lyrics)
+                self.audio.tags['SYLT'] = SYLT(encoding=3, lang="chi", desc="",
+                                               text=self._format_lyrics_with_timestamps(lyrics))
             elif ext == '.flac':
                 self.audio["LYRICS"] = lyrics
             elif ext == '.m4a':
@@ -73,6 +75,19 @@ class AudioHandler:
         except Exception as e:
             print(f"添加歌词时出错: {str(e)}")
             return False
+
+    def _format_lyrics_with_timestamps(self, lyrics: str) -> str:
+        """将歌词格式化为 SYLT 所需的格式"""
+        lines = lyrics.splitlines()
+        formatted_lyrics = ""
+        for line in lines:
+            # 处理时间戳和歌词
+            parts = line.split(']')
+            if len(parts) >= 2:
+                timestamp = parts[0][1:]  # 去除左方括号
+                text = parts[1].strip()
+                formatted_lyrics += f"{timestamp} {text}\n"
+        return formatted_lyrics
 
     def get_metadata(self) -> AudioMetadata:
         """获取音频元数据"""
