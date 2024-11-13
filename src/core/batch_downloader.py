@@ -79,6 +79,9 @@ class BatchDownloader(MusicDownloader):
                 skipped.append(song)
                 continue
 
+            if song.startswith("- "):
+                song = song[2:]
+
             self.log(f"[{i}/{total}] 处理: {song}")
             if await self.download_song(song, quality=quality,
                                         download_lyrics=download_lyrics,
