@@ -173,6 +173,7 @@ class EventHandler:
                     embed_lyrics=embed_lyrics,
                     only_lyrics=lyrics_option == "only_lyrics",
                 )
+                self.selected_song_mid = None
             else:
                 success = await downloader.download_song(
                     song_name,

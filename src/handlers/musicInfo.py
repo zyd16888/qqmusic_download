@@ -127,7 +127,9 @@ class MusicInfoFetcher:
                 singer=response.data.singer,
                 url=response.data.url,
                 cover=response.data.cover,
-                songmid=songmid
+                songmid=songmid,
+                quality=response.data.quality,
+                size=response.data.size
             )
 
         except Exception as e:
