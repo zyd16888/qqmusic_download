@@ -146,8 +146,8 @@ class BatchDownloader(MusicDownloader):
     def _get_existing_songs_from_file() -> Set[str]:
         """获取已存在的歌曲"""
         if config.DOWNLOADS_FILE.exists():
-            with open(config.DOWNLOADS_FILE, 'r') as f:
-                return {line.split(' - ')[0].strip() for line in f if line.endswith(('.mp3', '.flac'))}
+            with open(config.DOWNLOADS_FILE, 'r', encoding='utf-8') as f:
+                return {line.split(' - ')[0].strip() for line in f if line.endswith(('.mp3\n', '.flac\n'))}
         else:
             return set()
 
