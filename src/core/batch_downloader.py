@@ -66,6 +66,7 @@ class BatchDownloader(MusicDownloader):
         skipped = []
 
         self.log(f"共找到 {total} 首歌曲")
+        self.log(f"扫描到已存在 {len(self.existing_songs)} 首歌曲")
 
         for i, song in enumerate(songs, 1):
             if self.stop_event and self.stop_event.is_set():
