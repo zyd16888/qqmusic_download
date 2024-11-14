@@ -1,4 +1,6 @@
 import json
+import time
+import random
 from typing import Optional, Callable
 
 import aio_pika
@@ -69,15 +71,18 @@ class MusicDownloadService(BatchDownloader):
                     embed_lyrics=body.get("embed_lyrics", True)
                 )
 
+
                 if success:
                     # 下载成功，将歌曲添加到已存在列表中
                     self.existing_songs.add(song_key)
+                    time.sleep(random.randint(5, 10))
                 elif retry_count < self.max_retries:
                     # 下载失败，重新入队
                     await self.requeue_failed_message(song_name, retry_count + 1, 
                                                     body.get("quality", 11), 
                                                     body.get("download_lyrics", True), 
                                                     body.get("embed_lyrics", True))
+                    time.sleep(random.randint(10, 20))
                 else:
                     # 超过最大重试次数，发送到死信队列
                     await self.send_to_failed_queue(song_name)
