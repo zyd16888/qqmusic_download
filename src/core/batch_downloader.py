@@ -95,6 +95,9 @@ class BatchDownloader(MusicDownloader):
                 time.sleep(random.randint(1, 5))
             else:
                 failed.append(song)
+                random_wait = random.randint(5, 10)
+                self.log(f"等待 {random_wait} 秒后开始下一首...")
+                time.sleep(random_wait)
 
         # 保存下载报告
         download_results = {
@@ -154,7 +157,10 @@ class BatchDownloader(MusicDownloader):
         for retry_quality in quality_levels:
             if self.stop_event and self.stop_event.is_set():
                 return False
-
+            
+            random_wait = random.randint(5, 10)
+            self.log(f"等待 {random_wait} 秒后重试...")
+            time.sleep(random_wait)
             self.log(f"尝试使用音质等级 {retry_quality} 下载...")
             success = await super().download_song(
                 keyword, n, retry_quality, download_lyrics, embed_lyrics, only_lyrics
