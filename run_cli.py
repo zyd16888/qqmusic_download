@@ -68,7 +68,7 @@ async def download_single(args):
 
 async def download_batch(args):
     cli_logger = CLILogger()
-    downloader = BatchDownloader(callback=cli_logger.log_message)
+    downloader = BatchDownloader(callback=cli_logger.log_message, auto_retry=not args.retry)
     
     await downloader.download_from_file(
         file_path=args.file,
@@ -98,6 +98,7 @@ def main():
     batch_parser.add_argument('-l', '--lyrics', action='store_true', help='下载歌词')
     batch_parser.add_argument('-e', '--embed-lyrics', action='store_true', help='嵌入歌词')
     batch_parser.add_argument('--only-lyrics', action='store_true', help='仅下载歌词')
+    batch_parser.add_argument('-r', '--retry', action='store_true', help='失败重试')
 
     args = parser.parse_args()
 
