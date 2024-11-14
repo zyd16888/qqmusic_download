@@ -17,7 +17,7 @@ async def main():
             rabbitmq_url=rabbitmq_config["url"],
             queue_name=rabbitmq_config["queue_name"],
             callback=cli_logger.log_message,
-            max_retries=3
+            max_retries=6
         )
         
         # 启动服务
