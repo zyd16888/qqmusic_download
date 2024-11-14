@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union
+from typing import Union, Optional, Callable
 
 from mutagen.flac import FLAC, Picture
 from mutagen.id3 import ID3, APIC, USLT, SYLT
@@ -12,9 +12,14 @@ from ..core.metadata import AudioMetadata
 class AudioHandler:
     """音频处理类"""
 
-    def __init__(self, filepath: Union[str, Path]):
+    def __init__(self, filepath: Union[str, Path], callback: Optional[Callable] = None):
         self.filepath = Path(filepath)
+        self.callback = callback or print
         self.audio = self._load_audio()
+
+    def log(self, message: str):
+        """日志输出"""
+        self.callback(message)
 
     def _load_audio(self):
         """加载音频文件"""
@@ -50,9 +55,10 @@ class AudioHandler:
                 self.audio.tags['covr'] = [MP4Cover(cover_data, imageformat=cover_format)]
 
             self.audio.save()
+            self.log("封面添加成功")
             return True
         except Exception as e:
-            print(f"添加封面时出错: {str(e)}")
+            self.log(f"添加封面时出错: {str(e)}")
             return False
 
     def add_lyrics(self, lyrics: str) -> bool:
@@ -71,9 +77,10 @@ class AudioHandler:
                 self.audio["\xa9lyr"] = lyrics
 
             self.audio.save()
+            self.log("歌词添加成功")
             return True
         except Exception as e:
-            print(f"添加歌词时出错: {str(e)}")
+            self.log(f"添加歌词时出错: {str(e)}")
             return False
 
     def _format_lyrics_with_timestamps(self, lyrics: str) -> str:
@@ -81,12 +88,16 @@ class AudioHandler:
         lines = lyrics.splitlines()
         formatted_lyrics = ""
         for line in lines:
-            # 处理时间戳和歌词
-            parts = line.split(']')
-            if len(parts) >= 2:
-                timestamp = parts[0][1:]  # 去除左方括号
-                text = parts[1].strip()
-                formatted_lyrics += f"{timestamp} {text}\n"
+            # 检查行是否包含时间戳格式 [xx:xx.xx]
+            if '[' in line and ']' in line:
+                parts = line.split(']')
+                if len(parts) >= 2:
+                    timestamp = parts[0][1:]  # 去除左方括号
+                    text = parts[1].strip()
+                    formatted_lyrics += f"{timestamp} {text}\n"
+            else:
+                # 如果没有时间戳，直接跳过该行或给它一个默认时间戳
+                continue  # 或者使用: formatted_lyrics += f"00:00.00 {line.strip()}\n"
         return formatted_lyrics
 
     def get_metadata(self) -> AudioMetadata:

@@ -123,7 +123,7 @@ class MusicDownloader:
                 self.log("正在添加封面...")
                 cover_data = await network.async_get_bytes(song_info.cover)
                 if cover_data:
-                    AudioHandler(temp_filepath).add_cover(cover_data)
+                    AudioHandler(temp_filepath, callback=self.callback).add_cover(cover_data)
 
             # 如果需要歌词，只下载一次
             lyrics_content = None
@@ -137,7 +137,7 @@ class MusicDownloader:
                 if lyrics_success:
                     if embed_lyrics:
                         self.log("正在嵌入歌词...")
-                        AudioHandler(temp_filepath).add_lyrics(lyrics_content)
+                        AudioHandler(temp_filepath, callback=self.callback).add_lyrics(lyrics_content)
 
                     if download_lyrics:
                         final_filename = self._get_final_filename(song_info)
