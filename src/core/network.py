@@ -14,12 +14,12 @@ class NetworkManager:
     def _setup_client(self) -> httpx.Client:
         """配置同步客户端"""
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        return httpx.Client(verify=False, trust_env=False)
+        return httpx.Client(verify=False, trust_env=False, timeout=10.0)
 
     async def _ensure_async_client(self):
         """确保异步客户端存在"""
         if self.async_client is None:
-            self.async_client = httpx.AsyncClient(verify=False, trust_env=False)
+            self.async_client = httpx.AsyncClient(verify=False, trust_env=False, timeout=10.0)
         return self.async_client
 
     async def close(self):
