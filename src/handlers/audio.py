@@ -68,9 +68,15 @@ class AudioHandler:
             if ext == '.mp3':
                 if not hasattr(self.audio, 'tags'):
                     self.audio.add_tags()
+                # 添加非同步歌词
                 self.audio.tags["USLT"] = USLT(encoding=3, lang="chi", desc="", text=lyrics)
-                self.audio.tags['SYLT'] = SYLT(encoding=3, lang="chi", desc="",
-                                               text=self._format_lyrics_with_timestamps(lyrics))
+                # 添加同步歌词
+                synced_lyrics = self._format_lyrics_with_timestamps(lyrics)
+                if synced_lyrics:  # 只有在成功解析到同步歌词时才添加
+                    self.audio.tags['SYLT'] = SYLT(encoding=3, lang="chi", desc="",
+                                                 format=2,  # 2表示毫秒为单位
+                                                 type=1,    # 1表示歌词
+                                                 text=synced_lyrics)
             elif ext == '.flac':
                 self.audio["LYRICS"] = lyrics
             elif ext == '.m4a':
@@ -83,22 +89,25 @@ class AudioHandler:
             self.log(f"添加歌词时出错: {str(e)}")
             return False
 
-    def _format_lyrics_with_timestamps(self, lyrics: str) -> str:
-        """将歌词格式化为 SYLT 所需的格式"""
+    def _format_lyrics_with_timestamps(self, lyrics: str) -> list:
+        """将歌词格式化为 SYLT 所需的格式
+        返回格式为: [(text, timestamp), ...]
+        """
+        result = []
         lines = lyrics.splitlines()
-        formatted_lyrics = ""
         for line in lines:
-            # 检查行是否包含时间戳格式 [xx:xx.xx]
             if '[' in line and ']' in line:
-                parts = line.split(']')
-                if len(parts) >= 2:
-                    timestamp = parts[0][1:]  # 去除左方括号
-                    text = parts[1].strip()
-                    formatted_lyrics += f"{timestamp} {text}\n"
-            else:
-                # 如果没有时间戳，直接跳过该行或给它一个默认时间戳
-                continue  # 或者使用: formatted_lyrics += f"00:00.00 {line.strip()}\n"
-        return formatted_lyrics
+                try:
+                    time_part = line[1:line.find(']')]  # 提取时间戳
+                    text = line[line.find(']')+1:].strip()  # 提取歌词文本
+                    if text:  # 确保有歌词文本
+                        # 将时间戳转换为毫秒
+                        minutes, seconds = time_part.split(':')
+                        timestamp = (int(minutes) * 60 + float(seconds)) * 1000
+                        result.append((text, int(timestamp)))
+                except:
+                    continue
+        return result
 
     def get_metadata(self) -> AudioMetadata:
         """获取音频元数据"""
