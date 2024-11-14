@@ -10,6 +10,7 @@ from .downloader import MusicDownloader
 from ..handlers.playlist import PlaylistManager
 from ..handlers.report import DownloadReportManager
 from ..utils.decorators import ensure_downloads_dir
+from ..utils.song_scanner import SongScanner
 
 
 class BatchDownloader(MusicDownloader):
@@ -58,10 +59,7 @@ class BatchDownloader(MusicDownloader):
                              download_lyrics: bool, embed_lyrics: bool,
                              only_lyrics: bool, playlist_name: Optional[str] = None) -> None:
         """处理歌曲列表"""
-        folder_exist_songs = self._get_existing_songs()
-        list_exist_songs = self._get_existing_songs_from_file()
-        # 合并
-        self.existing_songs = folder_exist_songs | list_exist_songs
+        self.existing_songs = SongScanner.get_existing_songs(config.DOWNLOADS_DIR, config.DOWNLOADS_FILE)
         total = len(songs)
         success = 0
         success_list = []
@@ -135,24 +133,6 @@ class BatchDownloader(MusicDownloader):
         self.log(f"成功: {success}")
         self.log(f"失败: {len(failed)}")
         self.log(f"跳过: {len(skipped)}")
-
-    @staticmethod
-    def _get_existing_songs() -> Set[str]:
-        """获取已存在的歌曲"""
-        return config.DOWNLOADS_DIR.exists() and {
-            filename.split(' - ')[0].strip()
-            for filename in os.listdir(config.DOWNLOADS_DIR)
-            if filename.endswith(('.mp3', '.flac'))
-        } or set()
-
-    @staticmethod
-    def _get_existing_songs_from_file() -> Set[str]:
-        """获取已存在的歌曲"""
-        if config.DOWNLOADS_FILE.exists():
-            with open(config.DOWNLOADS_FILE, 'r', encoding='utf-8') as f:
-                return {line.split(' - ')[0].strip() for line in f if line.endswith(('.mp3\n', '.flac\n'))}
-        else:
-            return set()
 
     async def download_song(self, keyword: str, n: int = 1, quality: int = 11,
                             download_lyrics: bool = False, embed_lyrics: bool = False,

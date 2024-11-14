@@ -4,6 +4,8 @@ from typing import Optional, Callable
 import aio_pika
 
 from ..core.batch_downloader import BatchDownloader
+from ..utils.song_scanner import SongScanner
+from ..core.config import Config
 
 
 class MusicDownloadService(BatchDownloader):
@@ -19,6 +21,7 @@ class MusicDownloadService(BatchDownloader):
         self.connection = None
         self.channel = None
         self.queue = None
+        self.existing_songs = SongScanner.get_existing_songs(Config.DOWNLOADS_DIR, Config.DOWNLOADS_FILE)
 
     async def connect(self):
         """连接到RabbitMQ"""
@@ -51,6 +54,12 @@ class MusicDownloadService(BatchDownloader):
                 song_name = body.get("song_name")
                 retry_count = body.get("retry_count", 0)
 
+                # 检查歌曲是否已存在
+                song_key = song_name.split(' - ')[0].strip()
+                if song_key in self.existing_songs:
+                    self.log(f"歌曲已存在，跳过: {song_name}")
+                    return
+
                 self.log(f"开始下载歌曲: {song_name} (重试次数: {retry_count})")
 
                 success = await self.download_song(
@@ -60,13 +69,16 @@ class MusicDownloadService(BatchDownloader):
                     embed_lyrics=body.get("embed_lyrics", True)
                 )
 
-                if not success and retry_count < self.max_retries:
+                if success:
+                    # 下载成功，将歌曲添加到已存在列表中
+                    self.existing_songs.add(song_key)
+                elif retry_count < self.max_retries:
                     # 下载失败，重新入队
                     await self.requeue_failed_message(song_name, retry_count + 1, 
-                                                       body.get("quality", 11), 
-                                                       body.get("download_lyrics", True), 
-                                                       body.get("embed_lyrics", True))
-                elif not success:
+                                                    body.get("quality", 11), 
+                                                    body.get("download_lyrics", True), 
+                                                    body.get("embed_lyrics", True))
+                else:
                     # 超过最大重试次数，发送到死信队列
                     await self.send_to_failed_queue(song_name)
 
@@ -115,6 +127,8 @@ class MusicDownloadService(BatchDownloader):
         """开始消费队列消息"""
         try:
             await self.connect()
+
+            self.log(f"已扫描到 {len(self.existing_songs)} 首已存在歌曲")
 
             async with self.queue.iterator() as queue_iter:
                 self.log("开始监听下载队列...")
