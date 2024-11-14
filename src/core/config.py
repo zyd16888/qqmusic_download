@@ -24,6 +24,7 @@ def get_default_quality_options() -> List[QualityOption]:
 class Config:
     """全局配置类"""
     DOWNLOADS_DIR: Path = field(default=Path('downloads'))
+    DOWNLOADS_FILE: Path = field(default=Path('downloads/downloads.txt'))
     PLAYLISTS_DIR: Path = field(default=Path('downloads/playlists'))
     REPORTS_DIR: Path = field(default=Path('downloads/reports'))
     LOGS_DIR: Path = field(default=Path('logs'))

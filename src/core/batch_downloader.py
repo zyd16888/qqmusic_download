@@ -58,7 +58,7 @@ class BatchDownloader(MusicDownloader):
                              download_lyrics: bool, embed_lyrics: bool,
                              only_lyrics: bool, playlist_name: Optional[str] = None) -> None:
         """处理歌曲列表"""
-        self.existing_songs = self._get_existing_songs()
+        self.existing_songs = self._get_existing_songs_from_file()
         total = len(songs)
         success = 0
         success_list = []
@@ -140,6 +140,15 @@ class BatchDownloader(MusicDownloader):
             for filename in os.listdir(config.DOWNLOADS_DIR)
             if filename.endswith(('.mp3', '.flac'))
         } or set()
+
+    @staticmethod
+    def _get_existing_songs_from_file() -> Set[str]:
+        """获取已存在的歌曲"""
+        if config.DOWNLOADS_FILE.exists():
+            with open(config.DOWNLOADS_FILE, 'r') as f:
+                return {line.split(' - ')[0].strip() for line in f if line.endswith(('.mp3', '.flac'))}
+        else:
+            return set()
 
     async def download_song(self, keyword: str, n: int = 1, quality: int = 11,
                             download_lyrics: bool = False, embed_lyrics: bool = False,
