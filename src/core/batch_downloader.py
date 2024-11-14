@@ -92,7 +92,9 @@ class BatchDownloader(MusicDownloader):
                 success += 1
                 success_list.append(song)
                 self.existing_songs.add(song_name)
-                time.sleep(random.randint(1, 5))
+                random_wait = random.randint(1, 5)
+                self.log(f"等待 {random_wait} 秒后开始下一首...")
+                time.sleep(random_wait)
             else:
                 failed.append(song)
                 random_wait = random.randint(5, 10)
