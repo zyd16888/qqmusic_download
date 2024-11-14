@@ -58,7 +58,10 @@ class BatchDownloader(MusicDownloader):
                              download_lyrics: bool, embed_lyrics: bool,
                              only_lyrics: bool, playlist_name: Optional[str] = None) -> None:
         """处理歌曲列表"""
-        self.existing_songs = self._get_existing_songs_from_file()
+        folder_exist_songs = self._get_existing_songs()
+        list_exist_songs = self._get_existing_songs_from_file()
+        # 合并
+        self.existing_songs = folder_exist_songs | list_exist_songs
         total = len(songs)
         success = 0
         success_list = []
