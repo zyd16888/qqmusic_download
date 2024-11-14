@@ -1,5 +1,7 @@
 import os
 import threading
+import time
+import random
 from typing import Optional, Callable, Set, List
 from pathlib import Path
 
@@ -90,6 +92,7 @@ class BatchDownloader(MusicDownloader):
                 success += 1
                 success_list.append(song)
                 self.existing_songs.add(song_name)
+                time.sleep(random.randint(1, 5))
             else:
                 failed.append(song)
 
