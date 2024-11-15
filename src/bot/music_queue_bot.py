@@ -29,7 +29,8 @@ class MusicQueueBot:
             "2. 机器人会自动解析歌单并将歌曲添加到下载队列\n"
             "支持的链接格式：\n"
             "- 网易云音乐歌单链接 \n"
-            "- QQ音乐歌单链接"
+            "- QQ音乐歌单链接\n"
+            "3. 使用 /song 命令添加单曲"
         )
 
     async def process_playlist(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -87,6 +88,36 @@ class MusicQueueBot:
             print(f"处理歌单时出错：{str(e)}")
             await processing_message.edit_text(f"处理歌单时出错：{str(e)}")
 
+    async def song(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """处理 /song 命令"""
+        # 检查是否提供了歌名参数
+        if not context.args:
+            await update.message.reply_text("请提供歌名！使用方式：/song 歌名")
+            return
+
+        # 获取歌名
+        song_name = " ".join(context.args)
+        
+        try:
+            # 发送处理中的消息
+            processing_message = await update.message.reply_text("正在处理歌曲请求，请稍候...")
+            
+            # 将单曲包装为列表
+            songs = [song_name]
+            
+            # 发送歌曲到队列
+            await send_songs_to_queue(
+                songs,
+                rabbitmq_url=self.rabbitmq_url
+            )
+            
+            # 更新成功消息
+            await processing_message.edit_text(f"✅ 已将歌曲 '{song_name}' 添加到下载队列！")
+            
+        except Exception as e:
+            print(f"处理单曲请求时出错：{str(e)}")
+            await processing_message.edit_text(f"处理单曲请求时出错：{str(e)}")
+
     def run(self):
         """运行机器人"""
         app = Application.builder().token(self.token).build()
@@ -94,6 +125,7 @@ class MusicQueueBot:
         # 注册命令处理器
         app.add_handler(CommandHandler("start", self.start))
         app.add_handler(CommandHandler("help", self.help))
+        app.add_handler(CommandHandler("song", self.song))
 
         # 注册消息处理器
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.process_playlist))
