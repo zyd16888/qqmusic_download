@@ -58,14 +58,15 @@ class MusicQueueBot:
             )
 
             # 更新成功消息
-            song_names = [song['name'] for song in songs]
+            song_names = [song for song in songs]
             await processing_message.edit_text(
                 f"✅ 成功添加 {len(songs)} 首歌曲到下载队列！\n"
-                f"添加的歌曲：{', '.join(song_names)}\n"
+                f"添加的歌曲：\n" + "\n".join(song_names) + "\n"
                 f"歌单处理完成。"
             )
 
         except Exception as e:
+            print(f"处理歌单时出错：{str(e)}")
             await processing_message.edit_text(f"处理歌单时出错：{str(e)}")
 
     def run(self):
