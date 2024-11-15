@@ -31,6 +31,9 @@ class MusicDownloadService(BatchDownloader):
         try:
             self.connection = await aio_pika.connect_robust(self.rabbitmq_url)
             self.channel = await self.connection.channel()
+            
+            # 设置 QoS，限制未确认消息的数量为 10
+            await self.channel.set_qos(prefetch_count=10)
 
             # 声明一个持久化的队列
             self.queue = await self.channel.declare_queue(
