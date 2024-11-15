@@ -4,6 +4,7 @@ import random
 from typing import Optional, Callable
 
 import aio_pika
+import asyncio
 
 from ..core.batch_downloader import BatchDownloader
 from ..utils.song_scanner import SongScanner
@@ -50,8 +51,8 @@ class MusicDownloadService(BatchDownloader):
 
     async def process_message(self, message: aio_pika.IncomingMessage):
         """处理队列消息"""
-        async with message.process():
-            try:
+        try:
+            async with message.process():
                 body = json.loads(message.body.decode())
                 song_name = body.get("song_name")
                 retry_count = body.get("retry_count", 0)
@@ -87,10 +88,12 @@ class MusicDownloadService(BatchDownloader):
                     # 超过最大重试次数，发送到死信队列
                     await self.send_to_failed_queue(song_name)
 
-            except Exception as e:
-                self.log(f"处理消息时出错: {str(e)}")
-                # 发生异常时，消息会自动返回队列
-                raise
+        except aio_pika.exceptions.ChannelClosed:
+            # 向上层抛出channel关闭异常，触发重连
+            raise
+        except Exception as e:
+            self.log(f"处理消息时出错: {str(e)}")
+            raise
 
     async def requeue_failed_message(self, song_name: str, retry_count: int, 
                                        quality: int, download_lyrics: bool, 
@@ -130,18 +133,47 @@ class MusicDownloadService(BatchDownloader):
 
     async def start_consuming(self):
         """开始消费队列消息"""
+        while True:  # 添加永久循环
+            try:
+                if not self.connection or self.connection.is_closed:
+                    await self.connect()
+
+                self.log(f"已扫描到 {len(self.existing_songs)} 首已存在歌曲")
+
+                async with self.queue.iterator() as queue_iter:
+                    self.log("开始监听下载队列...")
+                    async for message in queue_iter:
+                        try:
+                            await self.process_message(message)
+                        except aio_pika.exceptions.ChannelClosed:
+                            # 如果channel关闭，尝试重连
+                            self.log("Channel已关闭，尝试重新连接...")
+                            if await self.reconnect():
+                                # 重新发送消息到队列
+                                await message.nack(requeue=True)
+                            break
+                        except Exception as e:
+                            self.log(f"处理消息时出错: {str(e)}")
+                            await message.nack(requeue=True)
+                            continue
+
+            except Exception as e:
+                self.log(f"消费消息时出错: {str(e)}")
+                # 等待一段时间后重试
+                await asyncio.sleep(5)
+            finally:
+                if self.connection and not self.connection.is_closed:
+                    await self.connection.close()
+
+    async def reconnect(self):
+        """重新连接到RabbitMQ"""
         try:
-            await self.connect()
-
-            self.log(f"已扫描到 {len(self.existing_songs)} 首已存在歌曲")
-
-            async with self.queue.iterator() as queue_iter:
-                self.log("开始监听下载队列...")
-                async for message in queue_iter:
-                    await self.process_message(message)
-
-        except Exception as e:
-            self.log(f"消费消息时出错: {str(e)}")
-        finally:
-            if self.connection:
+            if self.connection and not self.connection.is_closed:
                 await self.connection.close()
+            
+            await self.connect()
+            self.log("已重新连接到RabbitMQ")
+            return True
+        except Exception as e:
+            self.log(f"重新连接RabbitMQ失败: {str(e)}")
+            return False

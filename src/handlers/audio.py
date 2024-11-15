@@ -23,8 +23,14 @@ class AudioHandler:
 
     def _load_audio(self):
         """加载音频文件"""
+        if not self.filepath.exists():
+            raise FileNotFoundError(f"文件不存在: {self.filepath}")
+        
+        if self.filepath.stat().st_size == 0:
+            raise ValueError(f"文件大小为0: {self.filepath}")
+        
         handlers = {
-            '.mp3': lambda p: MP3(p, ID3=ID3),
+            '.mp3': lambda p: self._load_mp3(p),
             '.flac': FLAC,
             '.m4a': MP4
         }
@@ -32,6 +38,31 @@ class AudioHandler:
         if not handler:
             raise ValueError(f"不支持的音频格式: {self.filepath.suffix}")
         return handler(self.filepath)
+
+    def _load_mp3(self, filepath):
+        """专门处理MP3文件的加载"""
+        try:
+            # 首先尝试常规加载
+            audio = MP3(filepath, ID3=ID3)
+            return audio
+        except Exception as e:
+            # 如果失败，尝试以更严格的方式加载
+            try:
+                self.log("常规加载失败，尝试修复模式...")
+                from mutagen.mp3 import HeaderNotFoundError
+                if isinstance(e, HeaderNotFoundError):
+                    # 使用 ffmpeg 修复文件
+                    import subprocess
+                    temp_file = filepath.parent / (filepath.stem + "_temp" + filepath.suffix)
+                    subprocess.run(['ffmpeg', '-i', str(filepath), '-acodec', 'copy', str(temp_file)], 
+                                 capture_output=True)
+                    
+                    if temp_file.exists():
+                        temp_file.replace(filepath)
+                        return MP3(filepath, ID3=ID3)
+                raise e
+            except Exception as e2:
+                raise ValueError(f"MP3文件加载失败: {str(e2)}")
 
     def add_cover(self, cover_data: bytes, mime_type: str = 'image/jpeg') -> bool:
         """添加封面"""

@@ -119,12 +119,23 @@ class MusicDownloader:
                                   download_lyrics: bool, embed_lyrics: bool) -> bool:
         """处理下载的音频文件"""
         try:
+            # 验证文件完整性
+            if not temp_filepath.exists() or temp_filepath.stat().st_size == 0:
+                self.log("下载的文件无效")
+                return False
+            
+            audio_handler = AudioHandler(temp_filepath, callback=self.callback)
+            
             if song_info.cover:
                 self.log("正在添加封面...")
-                cover_data = await network.async_get_bytes(song_info.cover)
-                if cover_data:
-                    AudioHandler(temp_filepath, callback=self.callback).add_cover(cover_data)
-
+                try:
+                    cover_data = await network.async_get_bytes(song_info.cover)
+                    if cover_data:
+                        if not audio_handler.add_cover(cover_data):
+                            self.log("添加封面失败，但继续处理...")
+                except Exception as e:
+                    self.log(f"封面处理失败: {str(e)}，继续处理其他部分...")
+            
             # 如果需要歌词，只下载一次
             lyrics_content = None
             if download_lyrics or embed_lyrics:
