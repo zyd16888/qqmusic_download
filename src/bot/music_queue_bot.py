@@ -3,9 +3,8 @@ import os
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
-from ..handlers.playlist import PlaylistManager
-# 从你现有的文件导入发送队列函数
-from ..handlers.send_playlist_to_queue import send_songs_to_queue
+from src.handlers.playlist import PlaylistManager
+from src.handlers.send_playlist_to_queue import send_songs_to_queue
 
 
 class MusicQueueBot:
