@@ -59,11 +59,29 @@ class MusicQueueBot:
 
             # 更新成功消息
             song_names = [song for song in songs]
+            songs_per_message = 50  # 每条消息显示的歌曲数量
+            
+            # 发送总览消息
             await processing_message.edit_text(
                 f"✅ 成功添加 {len(songs)} 首歌曲到下载队列！\n"
-                f"添加的歌曲：\n" + "\n".join(song_names) + "\n"
-                f"歌单处理完成。"
+                f"正在发送歌单详情..."
             )
+            
+            # 分批发送歌曲列表
+            for i in range(0, len(song_names), songs_per_message):
+                batch = song_names[i:i + songs_per_message]
+                batch_number = i // songs_per_message + 1
+                total_batches = (len(song_names) + songs_per_message - 1) // songs_per_message
+                
+                message = (
+                    f"歌单详情 ({batch_number}/{total_batches})：\n\n"
+                    + "\n".join(f"{i + j + 1}. {song}" for j, song in enumerate(batch))
+                )
+                
+                await update.message.reply_text(message)
+            
+            # 发送完成消息
+            await update.message.reply_text("歌单处理完成。")
 
         except Exception as e:
             print(f"处理歌单时出错：{str(e)}")
